@@ -1,0 +1,156 @@
+/* Custom slider styling for better aesthetics */
+input[type=range] {
+  -webkit-appearance: none; 
+  background: transparent; 
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #34d399; /* emerald-400 */
+  cursor: pointer;
+  margin-top: -8px; 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+  background: #475569; /* slate-600 */
+  border-radius: 2px;
+}
+
+input[type=range]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:disabled {
+  background-color: #64748b;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Quiz Transitions */
+.fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.quiz-option {
+  transition: all 0.2s ease;
+}
+
+.quiz-option:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+.quiz-option.correct {
+  background-color: #064e3b !important; /* emerald-900 */
+  border-color: #34d399 !important; /* emerald-400 */
+  color: #34d399 !important;
+}
+
+.quiz-option.wrong {
+  background-color: #7f1d1d !important; /* red-900 */
+  border-color: #f87171 !important; /* red-400 */
+  color: #fca5a5 !important; /* red-300 */
+}
+
+/* Gacha Card Styles */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+}
+
+.card-flip .card-inner {
+  transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-front {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: white;
+  border: 4px solid #334155;
+}
+
+.card-back {
+  background-color: white;
+  color: black;
+  transform: rotateY(180deg);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Rarity Styles */
+.rarity-1 { /* Common */
+  background: linear-gradient(to bottom right, #eff6ff, #dbeafe);
+  border: 4px solid #60a5fa;
+}
+.rarity-2 { /* Rare */
+  background: linear-gradient(to bottom right, #fffbeb, #fef3c7);
+  border: 4px solid #f59e0b;
+}
+.rarity-3 { /* UR */
+  background: linear-gradient(to bottom right, #faf5ff, #f3e8ff);
+  border: 4px solid #d8b4fe;
+  position: relative;
+  overflow: hidden;
+}
+.rarity-3::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 60%);
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% { transform: translate(-30%, -30%) rotate(0deg); }
+  100% { transform: translate(30%, 30%) rotate(0deg); }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+}
