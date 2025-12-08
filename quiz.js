@@ -1,5 +1,5 @@
 import { initGame, updateParams, setRestartCallback, resetGame, launchBall, resetSessionBest, getLastGachaItem } from './app.js';
-import { ITEM_LIST, getCollection, getCollectionStats, checkComplete } from './gacha.js';
+import { ITEM_LIST, getCollection, getCollectionStats } from './gacha.js';
 
 // --- Helper Functions for generating math questions ---
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -593,19 +593,6 @@ function renderMenu() {
   
   updateGlobalStats();
   
-  // Check Completion
-  const isComplete = checkComplete();
-  const badge = document.getElementById('complete-badge');
-  if (isComplete) {
-      if(badge) badge.classList.remove('hidden');
-      els.menuContainer.classList.remove('bg-slate-50');
-      els.menuContainer.classList.add('bg-gradient-to-b', 'from-amber-50', 'to-yellow-100');
-  } else {
-      if(badge) badge.classList.add('hidden');
-      els.menuContainer.classList.add('bg-slate-50');
-      els.menuContainer.classList.remove('bg-gradient-to-b', 'from-amber-50', 'to-yellow-100');
-  }
-
   els.genreGrid.innerHTML = '';
 
   // Render Standard Genres
