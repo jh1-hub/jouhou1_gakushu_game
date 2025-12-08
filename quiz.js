@@ -1,5 +1,5 @@
 import { initGame, updateParams, setRestartCallback, resetGame, launchBall, resetSessionBest } from './app.js';
-import { ITEM_LIST, getCollection } from './gacha.js';
+import { ITEM_LIST, getCollection, getCollectionStats } from './gacha.js';
 
 // --- Helper Functions for generating math questions ---
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -448,6 +448,28 @@ function updateGlobalStats() {
   if (els.valGlobalBest) {
     els.valGlobalBest.textContent = maxShot.toFixed(1);
   }
+  
+  // Update Collection Stats in Menu
+  const colStats = getCollectionStats();
+  const statsContainer = document.getElementById('collection-stats-container');
+  if (statsContainer) {
+      statsContainer.innerHTML = `
+        <div class="flex flex-col items-center">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">Common</span>
+            <span class="font-mono font-bold text-sky-500">${colStats.r1.owned}/${colStats.r1.total}</span>
+        </div>
+        <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+        <div class="flex flex-col items-center">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">Rare</span>
+            <span class="font-mono font-bold text-amber-500">${colStats.r2.owned}/${colStats.r2.total}</span>
+        </div>
+        <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+        <div class="flex flex-col items-center">
+            <span class="text-[10px] font-bold text-slate-400 uppercase">UR</span>
+            <span class="font-mono font-bold text-purple-500">${colStats.r3.owned}/${colStats.r3.total}</span>
+        </div>
+      `;
+  }
 }
 
 function resetProgress() {
@@ -458,6 +480,7 @@ function resetProgress() {
   });
   localStorage.removeItem(`golf_stats_comprehensive`);
   localStorage.removeItem('golf_gacha_collection'); // Reset Collection
+  localStorage.removeItem('golf_gacha_history'); // Reset History
   resetSessionBest();
   renderMenu();
 }
@@ -627,40 +650,44 @@ function renderQuizStructure() {
   const headerGradient = isComp ? 'from-amber-500 to-orange-500' : 'from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700';
 
   els.quizContainer.innerHTML = `
-    <div id="quiz-card" class="max-w-2xl w-full bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-600 overflow-hidden fade-in mx-4 transition-colors duration-300">
-      <div class="bg-gradient-to-r ${headerGradient} p-6 text-white text-center shadow-md relative">
-        <button id="btn-quit-quiz" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white font-bold text-sm bg-black/20 px-3 py-1 rounded-full hover:bg-black/30 transition">✕ MENU</button>
-        <h1 class="text-xl font-bold tracking-tight mb-1">${currentGenre.title}</h1>
-        <div class="flex justify-between items-center text-white/80 text-xs font-medium uppercase tracking-widest mt-2 px-8">
-            <span>Question <span id="q-idx">1</span> / ${currentQuestions.length}</span>
+    <div id="quiz-card" class="max-w-2xl w-full bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-600 overflow-hidden fade-in mx-4 transition-colors duration-300 flex flex-col max-h-[90vh]">
+      <div class="bg-gradient-to-r ${headerGradient} p-4 text-white text-center shadow-md relative shrink-0">
+        <button id="btn-quit-quiz" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white font-bold text-xs bg-black/20 px-3 py-1 rounded-full hover:bg-black/30 transition">✕ MENU</button>
+        <h1 class="text-lg font-bold tracking-tight mb-1 truncate px-8">${currentGenre.title}</h1>
+        <div class="flex justify-between items-center text-white/80 text-[10px] font-medium uppercase tracking-widest mt-1 px-4">
+            <span>Q <span id="q-idx">1</span>/${currentQuestions.length}</span>
             <span>Score <span id="val-quiz-score">0</span></span>
         </div>
       </div>
-      <div class="p-6 md:p-8">
-        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-8">
-          <div id="quiz-progress" class="${isComp ? 'bg-amber-500' : 'bg-emerald-500'} h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+      
+      <div class="p-4 md:p-8 overflow-y-auto flex-grow flex flex-col">
+        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-4 shrink-0">
+          <div id="quiz-progress" class="${isComp ? 'bg-amber-500' : 'bg-emerald-500'} h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
-        <div id="question-area">
-          <h2 id="question-text" class="text-lg md:text-xl font-bold text-slate-800 dark:text-slate-100 mb-8 text-center min-h-[3rem] flex items-center justify-center"></h2>
-          <div id="options-grid" class="grid grid-cols-1 gap-3 mb-6"></div>
+        
+        <div id="question-area" class="flex-grow flex flex-col">
+          <h2 id="question-text" class="text-base md:text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 md:mb-8 text-center min-h-[3rem] flex items-center justify-center"></h2>
+          <div id="options-grid" class="grid grid-cols-1 gap-2 md:gap-3 mb-4"></div>
         </div>
-        <div id="feedback-area" class="hidden text-center mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-          <p id="feedback-text" class="text-lg font-bold mb-4"></p>
+
+        <div id="feedback-area" class="hidden text-center mt-auto pt-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
+          <p id="feedback-text" class="text-lg font-bold mb-3"></p>
           <button id="btn-next-question" class="w-full md:w-auto px-10 py-3 bg-slate-800 dark:bg-slate-700 text-white rounded-lg font-bold hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-lg border border-transparent dark:border-slate-600">Next</button>
         </div>
-        <div id="result-area" class="hidden text-center space-y-6">
-          <div class="text-5xl mb-4 animate-bounce">🎊</div>
-          <h2 class="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">Stage Clear!</h2>
+        
+        <div id="result-area" class="hidden text-center space-y-4 md:space-y-6 pb-4">
+          <div class="text-4xl md:text-5xl mb-2 animate-bounce">🎊</div>
+          <h2 class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white tracking-tight">Stage Clear!</h2>
           <p class="text-slate-500 dark:text-slate-400">Score: <span id="val-result-score" class="font-bold ${isComp ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'} text-2xl">${score}</span> / ${currentQuestions.length}</p>
           
           <div id="review-list-container"></div>
 
-          <div class="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl text-left text-sm text-slate-600 dark:text-slate-300 space-y-3 border border-slate-200 dark:border-slate-700 shadow-inner">
-            <p class="font-bold text-center mb-4 text-base ${isComp ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}">Item Get!</p>
-            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+          <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl text-left text-xs md:text-sm text-slate-600 dark:text-slate-300 space-y-2 border border-slate-200 dark:border-slate-700 shadow-inner">
+            <p class="font-bold text-center mb-2 text-base ${isComp ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}">Item Get!</p>
+            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-1">
               <span>⚡ Power Module</span> <span id="bonus-power" class="font-bold text-lg text-emerald-600 dark:text-emerald-400">+0</span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-1">
               <span>📐 Angle Gear</span> <span id="bonus-loft" class="font-bold text-lg text-emerald-600 dark:text-emerald-400">+0°</span>
             </div>
             <div class="flex justify-between items-center">
@@ -668,7 +695,7 @@ function renderQuizStructure() {
             </div>
           </div>
 
-          <button id="btn-start-game" class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-600 dark:to-teal-600 text-white rounded-xl font-bold text-lg shadow-lg hover:translate-y-[-2px] transition-all border border-emerald-500/50">
+          <button id="btn-start-game" class="w-full py-3 md:py-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-600 dark:to-teal-600 text-white rounded-xl font-bold text-lg shadow-lg hover:translate-y-[-2px] transition-all border border-emerald-500/50">
             PLAY BONUS GAME 🤖
           </button>
         </div>
@@ -705,7 +732,7 @@ function renderQuestion() {
 
   q.options.forEach((opt, idx) => {
     const btn = document.createElement('button');
-    btn.className = `quiz-option w-full p-4 text-left border-2 border-slate-200 dark:border-slate-700 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-white bg-white dark:bg-slate-800 transition-all`;
+    btn.className = `quiz-option w-full p-3 md:p-4 text-left border-2 border-slate-200 dark:border-slate-700 rounded-xl font-medium text-sm md:text-base text-slate-600 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-white bg-white dark:bg-slate-800 transition-all`;
     btn.textContent = opt;
     btn.onclick = () => handleAnswer(idx);
     grid.appendChild(btn);
@@ -727,8 +754,8 @@ function handleAnswer(selectedIndex) {
   
   // Create Explanation Element
   const expHtml = q.explanation ? 
-    `<div class="mt-4 p-4 text-sm text-left bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 animate-in fade-in slide-in-from-bottom-2">
-       <div class="font-bold text-xs uppercase mb-1 opacity-70">💡 Point</div>
+    `<div class="mt-2 md:mt-4 p-3 md:p-4 text-xs md:text-sm text-left bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 animate-in fade-in slide-in-from-bottom-2 max-h-32 overflow-y-auto">
+       <div class="font-bold text-[10px] uppercase mb-1 opacity-70">💡 Point</div>
        ${q.explanation}
     </div>` : '';
   
@@ -768,8 +795,8 @@ function handleAnswer(selectedIndex) {
     if (dist.wind > 0) bStr.push(`Assist +${dist.wind}`);
 
     feedbackText.innerHTML = `
-      <span class="text-emerald-600 dark:text-emerald-400 block text-xl mb-1">Correct!</span>
-      <span class="text-amber-500 dark:text-amber-400 text-sm font-bold">✨ ${bStr.join(' ')}</span>
+      <span class="text-emerald-600 dark:text-emerald-400 block text-lg md:text-xl mb-1">Correct!</span>
+      <span class="text-amber-500 dark:text-amber-400 text-xs md:text-sm font-bold">✨ ${bStr.join(' ')}</span>
       ${expHtml}
     `;
   } else {
@@ -780,7 +807,7 @@ function handleAnswer(selectedIndex) {
     options[selectedIndex].classList.add('wrong');
     options[q.a].classList.add('correct');
     options[q.a].classList.remove('opacity-60');
-    feedbackText.innerHTML = `<span class="text-rose-500 dark:text-rose-400 block text-xl">Incorrect...</span>${expHtml}`;
+    feedbackText.innerHTML = `<span class="text-rose-500 dark:text-rose-400 block text-lg md:text-xl">Incorrect...</span>${expHtml}`;
     
     // Record Wrong Answer
     wrongAnswers.push({
@@ -834,9 +861,9 @@ function showResults() {
   const container = document.getElementById('review-list-container');
   if (wrongAnswers.length > 0) {
       container.innerHTML = `
-        <div class="mt-6 bg-rose-50 dark:bg-rose-900/30 p-4 rounded-xl border border-rose-200 dark:border-rose-800 text-left">
-          <h3 class="font-bold text-rose-600 dark:text-rose-400 mb-3 text-sm uppercase flex items-center gap-2"><span>⚠️</span> Review Mistakes</h3>
-          <div class="space-y-3 max-h-40 overflow-y-auto pr-2 text-xs md:text-sm custom-scrollbar">
+        <div class="mt-4 md:mt-6 bg-rose-50 dark:bg-rose-900/30 p-3 md:p-4 rounded-xl border border-rose-200 dark:border-rose-800 text-left">
+          <h3 class="font-bold text-rose-600 dark:text-rose-400 mb-3 text-xs md:text-sm uppercase flex items-center gap-2"><span>⚠️</span> Review Mistakes</h3>
+          <div class="space-y-3 max-h-32 md:max-h-40 overflow-y-auto pr-2 text-[10px] md:text-sm custom-scrollbar">
             ${wrongAnswers.map(w => `
               <div class="border-b border-rose-100 dark:border-rose-800 pb-2 last:border-0 last:pb-0">
                 <p class="font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">${w.q}</p>

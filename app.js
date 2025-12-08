@@ -121,8 +121,8 @@ function handleRestart() {
 }
 
 function handleGacha() {
-  // Execute Gacha (Pass quizScore)
-  const result = drawGacha(state.score, state.quizScore);
+  // Execute Gacha (Pass quizScore and genreId)
+  const result = drawGacha(state.score, state.quizScore, state.genreId);
   
   // Update UI
   document.getElementById('view-result-score').classList.add('hidden');

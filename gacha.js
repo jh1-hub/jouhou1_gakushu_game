@@ -39,6 +39,7 @@ export const ITEM_LIST = [
 ];
 
 const STORAGE_KEY = 'golf_gacha_collection';
+const HISTORY_KEY = 'golf_gacha_history';
 
 // --- Functions ---
 
@@ -51,8 +52,60 @@ export function saveCollection(collection) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
 }
 
-export function drawGacha(distance, quizScore) {
+// Get history of plays (to determine consecutive/new genre)
+function getHistory() {
+  const json = localStorage.getItem(HISTORY_KEY);
+  return json ? JSON.parse(json) : { lastGenre: null, visitedGenres: [] };
+}
+
+function saveHistory(history) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+// Stats helper for Menu
+export function getCollectionStats() {
+    const collection = getCollection();
+    const stats = {
+        total: ITEM_LIST.length,
+        owned: 0,
+        r1: { total: 0, owned: 0 },
+        r2: { total: 0, owned: 0 },
+        r3: { total: 0, owned: 0 }
+    };
+    
+    ITEM_LIST.forEach(item => {
+        const isOwned = !!collection[item.id];
+        if (isOwned) stats.owned++;
+        
+        if (item.rarity === 1) {
+            stats.r1.total++;
+            if (isOwned) stats.r1.owned++;
+        } else if (item.rarity === 2) {
+            stats.r2.total++;
+            if (isOwned) stats.r2.owned++;
+        } else if (item.rarity === 3) {
+            stats.r3.total++;
+            if (isOwned) stats.r3.owned++;
+        }
+    });
+    return stats;
+}
+
+export function drawGacha(distance, quizScore, genreId) {
   const collection = getCollection();
+  const history = getHistory();
+  
+  // Logic: Check consecutive and first time
+  const isConsecutive = history.lastGenre === genreId;
+  const isFirstTime = !history.visitedGenres.includes(genreId);
+  
+  // Update History
+  history.lastGenre = genreId;
+  if (isFirstTime) {
+      history.visitedGenres.push(genreId);
+  }
+  saveHistory(history);
+
   
   // 1. Determine Target Rarity based on Distance & Quiz Score
   let rarityWeights;
@@ -69,23 +122,28 @@ export function drawGacha(distance, quizScore) {
     rarityWeights = { 1: 10, 2: 40, 3: 50 };
   }
 
-  // --- Apply Quiz Score Restrictions ---
-  
+  // --- Apply Bonus / Penalty ---
+  if (isFirstTime) {
+      // Bonus: Boost Rare/UR chances slightly
+      rarityWeights[2] += 10;
+      rarityWeights[3] += 5;
+  }
+
+  // --- Apply Quiz Score Restrictions (Override) ---
   if (quizScore <= 5) {
     // Condition 1: If 5 or less correct, ONLY Common items.
     rarityWeights = { 1: 100, 2: 0, 3: 0 };
   } else if (quizScore < 9) {
     // Condition 2: If less than 9 correct, NO UR items.
-    // Redistribution: Add UR weight to Rare weight.
     const urWeight = rarityWeights[3];
     rarityWeights[3] = 0;
     rarityWeights[2] += urWeight;
   }
-  // If 9 or more, use base weights (UR is possible)
+  
+  // Normalize weights (optional, but good for clarity)
+  // Logic continues with cumulative check...
 
-  // -------------------------------------
-
-  const rand = Math.random() * 100;
+  const rand = Math.random() * (rarityWeights[1] + rarityWeights[2] + rarityWeights[3]);
   let selectedRarity = 1;
   let cumulative = 0;
   
@@ -98,19 +156,28 @@ export function drawGacha(distance, quizScore) {
   }
 
   // 2. Select Item from Rarity Pool
-  // Logic: Bonus chance to get "Unowned" item based on distance
   const pool = ITEM_LIST.filter(i => i.rarity === selectedRarity);
   const unowned = pool.filter(i => !collection[i.id]);
-  const owned = pool.filter(i => collection[i.id]);
-
+  
   let finalItem;
   
-  // "New Item Chance" increases with distance (max 80% at 200m)
-  const newChance = Math.min(0.8, distance / 250); 
+  // "New Item Chance"
+  let newChance = Math.min(0.8, distance / 250); 
+  
+  // Penalty: Consecutive play reduces new card chance significantly
+  if (isConsecutive) {
+      newChance *= 0.2; // 80% reduction in new card chance
+  }
+  
+  // Bonus: First time play increases new card chance to max
+  if (isFirstTime) {
+      newChance = 1.0; 
+  }
   
   if (unowned.length > 0 && Math.random() < newChance) {
     finalItem = unowned[Math.floor(Math.random() * unowned.length)];
   } else {
+    // Fallback to full pool (likely duplicate)
     finalItem = pool[Math.floor(Math.random() * pool.length)];
   }
 
@@ -121,6 +188,8 @@ export function drawGacha(distance, quizScore) {
 
   return {
     item: finalItem,
-    isNew: collection[finalItem.id] === 1
+    isNew: collection[finalItem.id] === 1,
+    isFirstBonus: isFirstTime,
+    isConsecutivePenalty: isConsecutive
   };
 }
