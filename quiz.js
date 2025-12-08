@@ -360,6 +360,7 @@ let bonuses = { power: 10, loft: 20, wind: 0 };
 let isQuestionsExpanded = false;
 let wrongAnswers = [];
 let questionStartTime = 0;
+let currentShuffledIndices = [];
 
 // --- DOM Elements ---
 let els = {};
@@ -372,7 +373,6 @@ function init() {
     collectionModal: document.getElementById('collection-modal'),
     genreGrid: document.getElementById('genre-grid'),
     btnReset: document.getElementById('btn-reset'),
-    btnTheme: document.getElementById('btn-theme'),
     btnCollection: document.getElementById('btn-collection'),
     btnCloseCollection: document.getElementById('btn-close-collection'),
     valGlobalBest: document.getElementById('val-global-best'),
@@ -384,12 +384,8 @@ function init() {
     return;
   }
   
-  // Setup Theme
-  initTheme();
-  
   // Setup Controls
   if(els.btnReset) els.btnReset.onclick = resetProgress;
-  if(els.btnTheme) els.btnTheme.onclick = toggleTheme;
   if(els.btnCollection) els.btnCollection.onclick = openCollection;
   if(els.btnCloseCollection) els.btnCloseCollection.onclick = closeCollection;
   
@@ -479,8 +475,11 @@ function updateGlobalStats() {
 }
 
 function resetProgress() {
-  if(!confirm("すべての成績と記録をリセットしますか？\nAre you sure you want to reset all progress?")) return;
-  
+  if(!confirm("すべての成績と記録をリセットしますか？")) return;
+  if(!confirm("本当にいいですか？")) return;
+  if(!confirm("後悔しませんね？")) return;
+  if(!confirm("ほんとにぃ？（もどせないったら！）")) return;
+
   genres.forEach(g => {
     localStorage.removeItem(`golf_stats_${g.id}`);
   });
@@ -489,49 +488,6 @@ function resetProgress() {
   localStorage.removeItem('golf_gacha_history'); // Reset History
   resetSessionBest();
   renderMenu();
-}
-
-// --- Theme Logic ---
-function initTheme() {
-  const stored = localStorage.getItem('app_theme');
-  const html = document.documentElement;
-  
-  // If stored, use it. If not, check system preference.
-  if (stored) {
-      if (stored === 'light') {
-          html.classList.remove('dark');
-          updateThemeIcon(false);
-      } else {
-          html.classList.add('dark');
-          updateThemeIcon(true);
-      }
-  } else {
-      // Check System Preference
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          html.classList.add('dark');
-          updateThemeIcon(true);
-      } else {
-          html.classList.remove('dark');
-          updateThemeIcon(false);
-      }
-  }
-}
-
-function toggleTheme() {
-  const html = document.documentElement;
-  const isDark = html.classList.toggle('dark');
-  localStorage.setItem('app_theme', isDark ? 'dark' : 'light');
-  updateThemeIcon(isDark);
-}
-
-function updateThemeIcon(isDark) {
-  if(els.btnTheme) els.btnTheme.textContent = isDark ? '☀️' : '🌙';
-  
-  // Update Game Sky decoration
-  const deco = document.getElementById('sky-deco');
-  if(deco) {
-    deco.textContent = isDark ? '🌕' : '☀️';
-  }
 }
 
 function renderMenu() {
@@ -751,18 +707,29 @@ function renderQuestion() {
   const pct = (currentQuestionIndex / currentQuestions.length) * 100;
   document.getElementById('quiz-progress').style.width = `${pct}%`;
 
-  q.options.forEach((opt, idx) => {
+  // Create array of indices 0..n-1 and shuffle
+  currentShuffledIndices = Array.from({length: q.options.length}, (_, i) => i);
+  for (let i = currentShuffledIndices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [currentShuffledIndices[i], currentShuffledIndices[j]] = [currentShuffledIndices[j], currentShuffledIndices[i]];
+  }
+
+  // Render options based on shuffled indices
+  currentShuffledIndices.forEach((originalIndex, visualIndex) => {
     const btn = document.createElement('button');
     btn.className = `quiz-option w-full p-3 md:p-4 text-left border-2 border-slate-200 dark:border-slate-700 rounded-xl font-medium text-sm md:text-base text-slate-600 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-white bg-white dark:bg-slate-800 transition-all`;
-    btn.textContent = opt;
-    btn.onclick = () => handleAnswer(idx);
+    btn.textContent = q.options[originalIndex];
+    // Pass visualIndex so we can select the button in DOM, but use originalIndex for correctness check
+    btn.onclick = () => handleAnswer(visualIndex);
     grid.appendChild(btn);
   });
 }
 
-function handleAnswer(selectedIndex) {
+function handleAnswer(visualIndex) {
   const q = currentQuestions[currentQuestionIndex];
-  const isCorrect = selectedIndex === q.a;
+  const originalIndex = currentShuffledIndices[visualIndex];
+  const isCorrect = originalIndex === q.a;
+  
   const options = document.getElementById('options-grid').children;
 
   for (let btn of options) {
@@ -785,8 +752,8 @@ function handleAnswer(selectedIndex) {
     card.classList.remove('bg-white', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-600');
     card.classList.add('bg-emerald-100', 'dark:bg-emerald-900', 'border-emerald-500');
 
-    options[selectedIndex].classList.add('correct');
-    options[selectedIndex].classList.remove('opacity-60');
+    options[visualIndex].classList.add('correct');
+    options[visualIndex].classList.remove('opacity-60');
     score++;
     
     // Update live score display
@@ -825,16 +792,22 @@ function handleAnswer(selectedIndex) {
     card.classList.remove('bg-white', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-600');
     card.classList.add('bg-rose-100', 'dark:bg-rose-900', 'border-rose-500');
 
-    options[selectedIndex].classList.add('wrong');
-    options[q.a].classList.add('correct');
-    options[q.a].classList.remove('opacity-60');
+    options[visualIndex].classList.add('wrong');
+    
+    // Find the visual index of the correct answer to highlight it
+    const correctVisualIndex = currentShuffledIndices.indexOf(q.a);
+    if (correctVisualIndex !== -1) {
+        options[correctVisualIndex].classList.add('correct');
+        options[correctVisualIndex].classList.remove('opacity-60');
+    }
+    
     feedbackText.innerHTML = `<span class="text-rose-500 dark:text-rose-400 block text-lg md:text-xl">Incorrect...</span>${expHtml}`;
     
     // Record Wrong Answer
     wrongAnswers.push({
       q: q.q,
       correct: q.options[q.a],
-      selected: q.options[selectedIndex]
+      selected: q.options[originalIndex]
     });
   }
 
