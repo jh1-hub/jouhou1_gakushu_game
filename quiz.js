@@ -756,6 +756,7 @@ function startQuiz(genre) {
   
   renderQuizStructure();
   renderQuestion();
+  updateQuizStatsDisplay(); // Initial display
 }
 
 function renderQuizStructure() {
@@ -770,6 +771,22 @@ function renderQuizStructure() {
         <div class="flex justify-between items-center text-white/80 text-[10px] font-medium uppercase tracking-widest mt-1 px-4">
             <span>Q <span id="q-idx">1</span>/${currentQuestions.length}</span>
             <span>Score <span id="val-quiz-score">0</span></span>
+        </div>
+      </div>
+
+      <!-- Real-time Status Bar (Seamless with Game Screen) -->
+      <div class="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-200 bg-slate-50">
+        <div class="p-2 text-center">
+            <div class="text-[10px] font-bold text-slate-400 uppercase">Power</div>
+            <div id="q-stat-power" class="font-mono font-bold text-lg text-emerald-600">10</div>
+        </div>
+        <div class="p-2 text-center">
+            <div class="text-[10px] font-bold text-slate-400 uppercase">Angle</div>
+            <div id="q-stat-loft" class="font-mono font-bold text-lg text-emerald-600">20°</div>
+        </div>
+        <div class="p-2 text-center">
+            <div class="text-[10px] font-bold text-slate-400 uppercase">Assist</div>
+            <div id="q-stat-wind" class="font-mono font-bold text-lg text-emerald-600">0</div>
         </div>
       </div>
       
@@ -819,6 +836,16 @@ function renderQuizStructure() {
   document.getElementById('btn-next-question').onclick = nextQuestion;
   document.getElementById('btn-start-game').onclick = transitionToGame;
   document.getElementById('btn-quit-quiz').onclick = returnToMenu;
+}
+
+function updateQuizStatsDisplay() {
+    const elP = document.getElementById('q-stat-power');
+    const elL = document.getElementById('q-stat-loft');
+    const elW = document.getElementById('q-stat-wind');
+    
+    if(elP) elP.textContent = bonuses.power;
+    if(elL) elL.textContent = bonuses.loft + '°';
+    if(elW) elW.textContent = bonuses.wind;
 }
 
 function renderQuestion() {
@@ -912,6 +939,9 @@ function handleAnswer(visualIndex) {
     bonuses.power += dist.power;
     bonuses.loft += dist.loft;
     bonuses.wind += dist.wind;
+    
+    // Update Stats Display in Quiz UI
+    updateQuizStatsDisplay();
     
     let bStr = [];
     if (dist.power > 0) bStr.push(`Power +${dist.power}`);

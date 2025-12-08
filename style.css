@@ -147,19 +147,24 @@ button:disabled {
 /* Gacha Ray Effects (Background) */
 .gacha-rays {
   background: conic-gradient(from 0deg, transparent 0deg, rgba(255, 215, 0, 0.2) 20deg, transparent 40deg, rgba(255, 215, 0, 0.2) 60deg, transparent 80deg, rgba(255, 215, 0, 0.2) 100deg, transparent 120deg, rgba(255, 215, 0, 0.2) 140deg, transparent 160deg, rgba(255, 215, 0, 0.2) 180deg, transparent 200deg, rgba(255, 215, 0, 0.2) 220deg, transparent 240deg, rgba(255, 215, 0, 0.2) 260deg, transparent 280deg, rgba(255, 215, 0, 0.2) 300deg, transparent 320deg, rgba(255, 215, 0, 0.2) 340deg, transparent 360deg);
-  animation: spin 10s linear infinite;
+  animation: spin-scale 10s linear infinite;
   opacity: 0.6;
 }
 
 .gacha-rainbow {
   background: conic-gradient(from 0deg, rgba(255,0,0,0.1), rgba(255,165,0,0.1), rgba(255,255,0,0.1), rgba(0,128,0,0.1), rgba(0,0,255,0.1), rgba(75,0,130,0.1), rgba(238,130,238,0.1), rgba(255,0,0,0.1));
-  animation: spin 3s linear infinite;
+  animation: spin-scale 3s linear infinite;
   opacity: 0.8;
 }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes spin-scale {
+  from { transform: rotate(0deg) scale(2.5); }
+  to { transform: rotate(360deg) scale(2.5); }
 }
 
 
