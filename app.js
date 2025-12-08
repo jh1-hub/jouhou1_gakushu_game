@@ -346,8 +346,14 @@ function renderGame() {
   }
 
   if (els.ball) {
-    els.ball.setAttribute('cx', position.x);
-    els.ball.setAttribute('cy', -position.y);
+    // Rotation animation logic:
+    // Rotate 50 degrees per meter traveled (approx 1 rotation per 7 meters)
+    // Applying standard rotation transform
+    const rotation = position.x * 50; 
+    
+    // Note: y is inverted in SVG for drawing, so we translate to (x, -y)
+    // Rotation is applied around the element's origin (0,0 of the <g>) which is what we want since <text> is centered at 0,0
+    els.ball.setAttribute('transform', `translate(${position.x}, ${-position.y}) rotate(${rotation})`);
   }
 
   if (els.trail) {
