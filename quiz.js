@@ -1,5 +1,5 @@
 import { initGame, updateParams, setRestartCallback, resetGame, launchBall, resetSessionBest, getLastGachaItem } from './app.js';
-import { ITEM_LIST, getCollection, getCollectionStats } from './gacha.js';
+import { ITEM_LIST, getCollection, getCollectionStats, checkComplete } from './gacha.js';
 
 // --- Helper Functions for generating math questions ---
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -433,6 +433,7 @@ let bonuses = { power: 10, loft: 20, wind: 0 };
 let isQuestionsExpanded = false;
 let wrongAnswers = [];
 let questionStartTime = 0;
+let quizStartTime = 0; // Track total quiz time
 let currentShuffledIndices = [];
 
 // --- DOM Elements ---
@@ -593,6 +594,19 @@ function renderMenu() {
   
   updateGlobalStats();
   
+  // Check Completion
+  const isComplete = checkComplete();
+  const badge = document.getElementById('complete-badge');
+  if (isComplete) {
+      if(badge) badge.classList.remove('hidden');
+      els.menuContainer.classList.remove('bg-slate-50');
+      els.menuContainer.classList.add('bg-gradient-to-b', 'from-amber-50', 'to-yellow-100');
+  } else {
+      if(badge) badge.classList.add('hidden');
+      els.menuContainer.classList.add('bg-slate-50');
+      els.menuContainer.classList.remove('bg-gradient-to-b', 'from-amber-50', 'to-yellow-100');
+  }
+
   els.genreGrid.innerHTML = '';
 
   // Render Standard Genres
@@ -750,6 +764,7 @@ function startQuiz(genre) {
   currentQuestionIndex = 0;
   score = 0;
   bonuses = { power: 10, loft: 20, wind: 0 }; 
+  quizStartTime = Date.now(); // Start timer
 
   els.menuContainer.classList.add('hidden');
   els.quizContainer.classList.remove('hidden');
@@ -1052,13 +1067,18 @@ function transitionToGame() {
   // 1. Reset Game Physics & Status (IDLE)
   resetGame();
 
+  // Spam Detection
+  const quizDuration = (Date.now() - quizStartTime) / 1000;
+  // Threshold: e.g., less than 1.5 seconds per question avg AND low score
+  const isSpam = (quizDuration < currentQuestions.length * 1.5) && (score <= 5);
+
   // 2. Apply New Parameters from Quiz
   // PASS SCORE TO APP.JS
   updateParams({
     power: bonuses.power,
     loft: bonuses.loft,
     wind: bonuses.wind
-  }, currentGenre.id, score);
+  }, currentGenre.id, score, isSpam);
 
   // 3. Update UI Visibility
   els.quizContainer.classList.add('hidden');

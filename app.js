@@ -1,6 +1,6 @@
 import { updatePhysics } from './physics.js';
 import { TIME_STEP } from './constants.js';
-import { drawGacha } from './gacha.js';
+import { drawGacha, cancelGachaItem } from './gacha.js';
 
 // --- State ---
 const state = {
@@ -10,8 +10,9 @@ const state = {
     loft: 30, // Launch Angle in degrees
     wind: 5,
   },
-  genreId: null, // Current genre being played
-  quizScore: 0, // Number of correct answers in the last quiz session
+  genreId: null, 
+  quizScore: 0, 
+  isSpam: false, // NEW: Flag for spam detection
   physics: {
     position: { x: 0, y: 0 },
     velocity: { x: 0, y: 0 },
@@ -21,14 +22,14 @@ const state = {
   },
   particles: [],
   score: 0,
-  highScore: 0, // Session best
-  lastGachaItem: null // Added to store the result of the last gacha
+  highScore: 0, 
+  lastGachaItem: null 
 };
 
 let requestID = null;
 let skipTimeoutID = null;
 let els = {}; 
-let onRestartCallback = null; // Callback to return to menu
+let onRestartCallback = null; 
 
 // Speed multiplier
 const STEPS_PER_FRAME = 3;
@@ -57,7 +58,6 @@ function setStatus(newStatus) {
     els.msgFinished.classList.add('hidden');
     els.btnSkip.classList.add('hidden'); 
   } else if (isFinished) {
-    // Show Finish Screen logic is handled in handleFinish
     els.msgFinished.classList.remove('hidden'); 
     els.btnSkip.classList.add('hidden');
   } else {
@@ -112,7 +112,6 @@ function handleSkip() {
 }
 
 function handleRestart() {
-  // If a callback is registered (e.g., returnToMenu), use it.
   if (onRestartCallback) {
     resetGame();
     onRestartCallback();
@@ -122,22 +121,41 @@ function handleRestart() {
 }
 
 function handleGacha() {
-  // Execute Gacha (Pass quizScore and genreId)
-  const result = drawGacha(state.score, state.quizScore, state.genreId);
+  const result = drawGacha(state.score, state.quizScore, state.genreId, false, state.isSpam);
+  updateGachaUI(result, false);
+}
+
+function handleReroll() {
+    if (state.lastGachaItem) {
+        cancelGachaItem(state.lastGachaItem.id);
+    }
+    
+    // Draw gacha again with isReroll=true. Keep isSpam (if spamming, you just get duplicates anyway)
+    const result = drawGacha(state.score, state.quizScore, state.genreId, true, state.isSpam);
+    
+    // Reset Card Animation for re-reveal
+    const card = document.getElementById('gacha-card');
+    card.classList.remove('card-flip');
+    
+    setTimeout(() => {
+       updateGachaUI(result, true);
+    }, 200);
+}
+
+function updateGachaUI(result, isReroll) {
   state.lastGachaItem = result.item;
   
-  // Update UI
   document.getElementById('view-result-score').classList.add('hidden');
   const viewGacha = document.getElementById('view-gacha-result');
   viewGacha.classList.remove('hidden');
-  viewGacha.classList.add('flex'); // Add flex since it's removed by hidden
+  viewGacha.classList.add('flex'); 
   
   const card = document.getElementById('gacha-card');
   const cardBack = document.getElementById('gacha-card-back');
   const msgNew = document.getElementById('gacha-msg-new');
   const effectContainer = document.getElementById('gacha-effect');
+  const btnReroll = document.getElementById('btn-reroll');
   
-  // Set content
   cardBack.className = `card-back rounded-xl border-4 flex flex-col items-center justify-center p-2 text-slate-800 rarity-${result.item.rarity}`;
   cardBack.innerHTML = `
     <div class="text-4xl mb-2">${result.item.icon}</div>
@@ -148,20 +166,26 @@ function handleGacha() {
     </div>
   `;
   
-  // New badge
   if (result.isNew) {
     msgNew.classList.remove('hidden');
   } else {
     msgNew.classList.add('hidden');
   }
 
-  // Visual Effects for Rare/UR
-  effectContainer.className = 'absolute inset-0 pointer-events-none z-0'; // Reset
+  // Visual Effects
+  effectContainer.className = 'absolute inset-0 pointer-events-none z-0'; 
   if (result.item.rarity >= 2) {
       effectContainer.classList.add('gacha-rays');
       if (result.item.rarity === 3) {
           effectContainer.classList.add('gacha-rainbow');
       }
+  }
+
+  // Show Reroll Button if: Rare+ AND Duplicate AND Not a Reroll attempt already
+  if (result.item.rarity >= 2 && !result.isNew && !isReroll) {
+      btnReroll.classList.remove('hidden');
+  } else {
+      btnReroll.classList.add('hidden');
   }
 
   // Animate Flip
@@ -171,23 +195,21 @@ function handleGacha() {
 }
 
 export function resetGame() {
-  // CRITICAL: Call setStatus to ensure button is re-enabled visually
   setStatus('IDLE'); 
   
-  // Reset Result Views
   document.getElementById('view-result-score').classList.remove('hidden');
   const viewGacha = document.getElementById('view-gacha-result');
   viewGacha.classList.add('hidden');
   viewGacha.classList.remove('flex');
   document.getElementById('gacha-card').classList.remove('card-flip');
-  document.getElementById('gacha-effect').className = 'absolute inset-0 pointer-events-none z-0'; // Reset effects
+  document.getElementById('gacha-effect').className = 'absolute inset-0 pointer-events-none z-0'; 
+  document.getElementById('btn-reroll').classList.add('hidden'); 
 
   state.physics.isStopped = true;
   state.physics.position = {x: 0.5, y: 0.15};
   state.physics.history = [];
   state.particles = [];
   
-  // Clear trail visually immediately
   renderGame();
 }
 
@@ -214,7 +236,6 @@ function loop() {
     if (state.physics.isStopped) break;
   }
   
-  // Detect bounce for particles (if bounce count increased)
   if (state.physics.bounces > oldBounces) {
      spawnParticles(state.physics.position.x, 0, 8); 
   }
@@ -256,12 +277,10 @@ function updateParticles() {
 function handleFinish(distance) {
   state.score = distance;
   
-  // Update Session High Score
   if (distance > state.highScore) {
     state.highScore = distance;
   }
 
-  // Update Persistent Genre High Score
   if (state.genreId) {
     const key = `golf_stats_${state.genreId}`;
     const stored = localStorage.getItem(key);
@@ -275,7 +294,6 @@ function handleFinish(distance) {
 
   updateUI();
   
-  // Prepare Result Screen Text
   els.valFinalScore.textContent = state.score.toFixed(2);
   
   setStatus('FINISHED');
@@ -330,38 +348,9 @@ function renderGame() {
   renderMarkers(cameraX, viewWidth);
 }
 
-function renderParticles(cameraX, viewWidth) {
-  if (!els.grpParticles) return;
-  const html = state.particles.map(p => 
-    `<circle cx="${p.x}" cy="${-p.y}" r="${0.2 * p.life + 0.1}" fill="${p.color}" opacity="${p.life}" />`
-  ).join('');
-  els.grpParticles.innerHTML = html;
-}
-
-function renderMarkers(cameraX, viewWidth) {
-  if (!els.groundMarkers) return;
-  const start = Math.floor(cameraX / 10) * 10;
-  const end = start + viewWidth + 10;
-  let markersHtml = '';
-  markersHtml += `<rect x="${cameraX - 10}" y="0" width="${viewWidth + 20}" height="10" fill="#064e3b" />`;
-  markersHtml += `<line x1="${cameraX - 10}" y1="0" x2="${cameraX + viewWidth + 10}" y2="0" stroke="#047857" stroke-width="0.2" />`;
-
-  for (let i = start; i <= end; i += 10) {
-    if (i === 0) continue;
-    markersHtml += `
-      <g transform="translate(${i}, 0)">
-        <line x1="0" y1="0" x2="0" y2="-2" stroke="#475569" stroke-width="0.1" />
-        <rect x="-1" y="-3" width="2" height="1" fill="#475569" rx="0.2" />
-        <text x="0" y="-2.3" font-size="0.6" fill="#cbd5e1" text-anchor="middle" font-weight="bold">${i}m</text>
-      </g>
-    `;
-  }
-  els.groundMarkers.innerHTML = markersHtml;
-}
-
 // --- Initialization ---
 
-export function updateParams(newParams, genreId = null, quizScore = null) {
+export function updateParams(newParams, genreId = null, quizScore = null, isSpam = false) {
   if (newParams) {
     state.params = { ...state.params, ...newParams };
   }
@@ -371,6 +360,8 @@ export function updateParams(newParams, genreId = null, quizScore = null) {
   if (quizScore !== null) {
     state.quizScore = quizScore;
   }
+  state.isSpam = isSpam;
+  
   updateUI();
 }
 
@@ -408,9 +399,7 @@ export function initGame() {
     valFinalScore: document.getElementById('val-final-score'),
   };
 
-  // Only error if we expect to be in game mode, but here we init elements anyway
   if (!els.btnLaunch || !els.svg) {
-    // Console log but don't stop everything else, as Menu might be active
     console.log("Game elements not fully ready, but initGame called.");
   }
 
@@ -418,6 +407,10 @@ export function initGame() {
   els.btnSkip?.addEventListener('click', handleSkip);
   els.btnRestart?.addEventListener('click', handleRestart);
   els.btnGachaDraw?.addEventListener('click', handleGacha);
+  
+  // Setup Reroll Button
+  const btnReroll = document.getElementById('btn-reroll');
+  if(btnReroll) btnReroll.addEventListener('click', handleReroll);
 
   state.highScore = 0;
   updateUI();

@@ -142,6 +142,25 @@ export function saveCollection(collection) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
 }
 
+// Check if collection is complete
+export function checkComplete() {
+    const collection = getCollection();
+    const ownedCount = Object.keys(collection).length;
+    return ownedCount >= ITEM_LIST.length;
+}
+
+// Cancel (remove) the last acquired item (for reroll)
+export function cancelGachaItem(itemId) {
+    const collection = getCollection();
+    if (collection[itemId]) {
+        collection[itemId]--;
+        if (collection[itemId] <= 0) {
+            delete collection[itemId];
+        }
+        saveCollection(collection);
+    }
+}
+
 // Get history of plays (to determine consecutive/new genre)
 function getHistory() {
   const json = localStorage.getItem(HISTORY_KEY);
@@ -181,7 +200,7 @@ export function getCollectionStats() {
     return stats;
 }
 
-export function drawGacha(distance, quizScore, genreId) {
+export function drawGacha(distance, quizScore, genreId, isReroll = false, isSpam = false) {
   const collection = getCollection();
   const history = getHistory();
   
@@ -189,23 +208,27 @@ export function drawGacha(distance, quizScore, genreId) {
   const isConsecutive = history.lastGenre === genreId;
   const isFirstTime = !history.visitedGenres.includes(genreId);
   
-  // Update History
-  history.lastGenre = genreId;
-  if (isFirstTime) {
-      history.visitedGenres.push(genreId);
+  // Update History (only if not reroll)
+  if (!isReroll) {
+      history.lastGenre = genreId;
+      if (isFirstTime) {
+          history.visitedGenres.push(genreId);
+      }
+      saveHistory(history);
   }
-  saveHistory(history);
 
+  // Determine Effective Distance (Reroll Penalty)
+  const effectiveDistance = isReroll ? distance * 0.8 : distance;
   
   // 1. Determine Target Rarity based on Distance & Quiz Score
   let rarityWeights;
   
   // Base weights based on Distance
-  if (distance < 30) {
+  if (effectiveDistance < 30) {
     rarityWeights = { 1: 90, 2: 9, 3: 1 };
-  } else if (distance < 80) {
+  } else if (effectiveDistance < 80) {
     rarityWeights = { 1: 60, 2: 35, 3: 5 };
-  } else if (distance < 150) {
+  } else if (effectiveDistance < 150) {
     rarityWeights = { 1: 30, 2: 50, 3: 20 };
   } else {
     // Over 150m (Super Shot)
@@ -213,13 +236,13 @@ export function drawGacha(distance, quizScore, genreId) {
   }
 
   // --- Apply Bonus / Penalty ---
-  if (isFirstTime) {
+  if (isFirstTime && !isReroll) {
       // Bonus: Boost Rare/UR chances slightly
       rarityWeights[2] += 10;
       rarityWeights[3] += 5;
   }
 
-  // --- Apply Quiz Score Restrictions (Override) ---
+  // --- Apply Quiz Score Restrictions ---
   if (quizScore <= 5) {
     // Condition 1: If 5 or less correct, ONLY Common items.
     rarityWeights = { 1: 100, 2: 0, 3: 0 };
@@ -230,9 +253,6 @@ export function drawGacha(distance, quizScore, genreId) {
     rarityWeights[2] += urWeight;
   }
   
-  // Normalize weights (optional, but good for clarity)
-  // Logic continues with cumulative check...
-
   const rand = Math.random() * (rarityWeights[1] + rarityWeights[2] + rarityWeights[3]);
   let selectedRarity = 1;
   let cumulative = 0;
@@ -248,27 +268,39 @@ export function drawGacha(distance, quizScore, genreId) {
   // 2. Select Item from Rarity Pool
   const pool = ITEM_LIST.filter(i => i.rarity === selectedRarity);
   const unowned = pool.filter(i => !collection[i.id]);
+  const ownedPool = pool.filter(i => collection[i.id]);
   
   let finalItem;
-  
-  // "New Item Chance"
-  let newChance = Math.min(0.8, distance / 250); 
-  
-  // Penalty: Consecutive play reduces new card chance significantly
-  if (isConsecutive) {
-      newChance *= 0.2; // 80% reduction in new card chance
-  }
-  
-  // Bonus: First time play increases new card chance to max
-  if (isFirstTime) {
-      newChance = 1.0; 
-  }
-  
-  if (unowned.length > 0 && Math.random() < newChance) {
-    finalItem = unowned[Math.floor(Math.random() * unowned.length)];
+
+  // --- Spam Logic: If spamming, force duplicate if possible ---
+  if (isSpam && ownedPool.length > 0) {
+    finalItem = ownedPool[Math.floor(Math.random() * ownedPool.length)];
   } else {
-    // Fallback to full pool (likely duplicate)
-    finalItem = pool[Math.floor(Math.random() * pool.length)];
+    // Normal logic
+    // "New Item Chance"
+    let newChance = Math.min(0.8, effectiveDistance / 250); 
+    
+    // Penalty: Consecutive play reduces new card chance significantly
+    if (isConsecutive) {
+        newChance *= 0.2; 
+    }
+    
+    // Bonus: First time play increases new card chance
+    if (isFirstTime && !isReroll) {
+        newChance = 1.0; 
+    }
+    
+    // Penalty: Reroll reduces new card chance
+    if (isReroll) {
+        newChance *= 0.5;
+    }
+    
+    if (unowned.length > 0 && Math.random() < newChance) {
+      finalItem = unowned[Math.floor(Math.random() * unowned.length)];
+    } else {
+      // Fallback to full pool (likely duplicate)
+      finalItem = pool[Math.floor(Math.random() * pool.length)];
+    }
   }
 
   // 3. Save Result
@@ -280,6 +312,7 @@ export function drawGacha(distance, quizScore, genreId) {
     item: finalItem,
     isNew: collection[finalItem.id] === 1,
     isFirstBonus: isFirstTime,
-    isConsecutivePenalty: isConsecutive
+    isConsecutivePenalty: isConsecutive,
+    isSpamPenalty: isSpam
   };
 }
