@@ -375,7 +375,8 @@ function init() {
     btnTheme: document.getElementById('btn-theme'),
     btnCollection: document.getElementById('btn-collection'),
     btnCloseCollection: document.getElementById('btn-close-collection'),
-    valGlobalBest: document.getElementById('val-global-best')
+    valGlobalBest: document.getElementById('val-global-best'),
+    collectionStats: document.getElementById('collection-stats-container')
   };
 
   if (!els.menuContainer || !els.genreGrid) {
@@ -391,6 +392,11 @@ function init() {
   if(els.btnTheme) els.btnTheme.onclick = toggleTheme;
   if(els.btnCollection) els.btnCollection.onclick = openCollection;
   if(els.btnCloseCollection) els.btnCloseCollection.onclick = closeCollection;
+  
+  // Make stats container clickable
+  if(els.collectionStats) {
+      els.collectionStats.onclick = openCollection;
+  }
 
   // Initialize game engine
   try {

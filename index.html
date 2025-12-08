@@ -87,51 +87,6 @@
                   SKIP &gt;&gt;
                 </button>
 
-                <!-- Result / Gacha Overlay -->
-                <div id="msg-finished" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-white/60 dark:bg-black/80 backdrop-blur-sm transition-opacity duration-500">
-                  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 text-center shadow-2xl border-4 border-emerald-500 transform scale-100 animate-in zoom-in duration-300 max-w-sm w-full mx-4 flex flex-col items-center overflow-hidden relative">
-                    
-                    <!-- Result Phase -->
-                    <div id="view-result-score" class="w-full relative z-10">
-                      <h2 class="text-xl font-bold text-slate-500 dark:text-slate-400 mb-1 tracking-widest uppercase">RECORD</h2>
-                      <div class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-400 dark:to-teal-300 mb-6 font-mono">
-                        <span id="val-final-score">0.00</span><span class="text-lg text-slate-400 dark:text-slate-500 ml-2">m</span>
-                      </div>
-                      
-                      <button id="btn-gacha-draw" class="w-full py-4 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-xl font-bold text-xl shadow-lg hover:scale-105 transition-transform flex items-center justify-center gap-2 border-b-4 border-orange-600 animate-bounce">
-                        🎁 GET ITEM
-                      </button>
-                    </div>
-
-                    <!-- Gacha Phase -->
-                    <div id="view-gacha-result" class="hidden w-full flex-col items-center relative z-10">
-                       <div class="mb-4 text-sm font-bold text-slate-400 uppercase">Item Acquired!</div>
-                       
-                       <!-- Background Effect Container -->
-                       <div id="gacha-effect" class="absolute inset-0 pointer-events-none z-0"></div>
-
-                       <!-- Card -->
-                       <div class="perspective-1000 w-48 h-64 mb-6 cursor-pointer relative z-10" id="gacha-card">
-                         <div class="card-inner relative w-full h-full transition-transform duration-700">
-                           <div class="card-front bg-slate-800 rounded-xl flex items-center justify-center shadow-xl">
-                             <div class="text-4xl">?</div>
-                           </div>
-                           <div id="gacha-card-back" class="card-back rounded-xl border-4 flex flex-col items-center justify-center p-2 bg-white text-slate-800 shadow-xl">
-                             <!-- Content injected by JS -->
-                           </div>
-                         </div>
-                       </div>
-
-                       <div id="gacha-msg-new" class="hidden text-amber-500 font-black text-lg mb-2 animate-pulse relative z-10" style="text-shadow: 0 0 10px rgba(255, 180, 0, 0.5);">✨ NEW! ✨</div>
-
-                       <button id="btn-restart" class="w-full py-3 bg-slate-700 dark:bg-slate-700 text-white rounded-lg font-bold hover:bg-slate-600 transition-colors relative z-10">
-                        🏠 MENU
-                       </button>
-                    </div>
-
-                  </div>
-                </div>
-
               </div>
               
             </div>
@@ -227,7 +182,7 @@
 
                    <div class="flex flex-col md:flex-row items-stretch justify-center gap-4">
                       <!-- Collection Stats Container -->
-                      <div id="collection-stats-container" class="flex flex-wrap justify-center items-center bg-white dark:bg-slate-800 px-4 py-3 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 gap-4">
+                      <div id="collection-stats-container" class="flex flex-wrap justify-center items-center bg-white dark:bg-slate-800 px-4 py-3 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 gap-4 cursor-pointer hover:shadow-lg hover:border-emerald-400 transition-all transform hover:-translate-y-1 group">
                           <!-- Injected by quiz.js -->
                       </div>
 
@@ -267,6 +222,51 @@
            <div id="collection-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 overflow-y-auto custom-scrollbar p-2">
               <!-- Items injected here -->
            </div>
+        </div>
+      </div>
+      
+      <!-- Result / Gacha Overlay (Moved out for full screen access on mobile) -->
+      <div id="msg-finished" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-white/60 dark:bg-black/80 backdrop-blur-sm transition-opacity duration-500">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 text-center shadow-2xl border-4 border-emerald-500 transform scale-100 animate-in zoom-in duration-300 max-w-sm w-full mx-4 flex flex-col items-center overflow-hidden relative">
+          
+          <!-- Result Phase -->
+          <div id="view-result-score" class="w-full relative z-10">
+            <h2 class="text-xl font-bold text-slate-500 dark:text-slate-400 mb-1 tracking-widest uppercase">RECORD</h2>
+            <div class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-400 dark:to-teal-300 mb-6 font-mono">
+              <span id="val-final-score">0.00</span><span class="text-lg text-slate-400 dark:text-slate-500 ml-2">m</span>
+            </div>
+            
+            <button id="btn-gacha-draw" class="w-full py-4 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-xl font-bold text-xl shadow-lg hover:scale-105 transition-transform flex items-center justify-center gap-2 border-b-4 border-orange-600 animate-bounce">
+              🎁 GET ITEM
+            </button>
+          </div>
+
+          <!-- Gacha Phase -->
+          <div id="view-gacha-result" class="hidden w-full flex-col items-center relative z-10">
+             <div class="mb-4 text-sm font-bold text-slate-400 uppercase">Item Acquired!</div>
+             
+             <!-- Background Effect Container -->
+             <div id="gacha-effect" class="absolute inset-0 pointer-events-none z-0"></div>
+
+             <!-- Card -->
+             <div class="perspective-1000 w-48 h-64 mb-6 cursor-pointer relative z-10" id="gacha-card">
+               <div class="card-inner relative w-full h-full transition-transform duration-700">
+                 <div class="card-front bg-slate-800 rounded-xl flex items-center justify-center shadow-xl">
+                   <div class="text-4xl">?</div>
+                 </div>
+                 <div id="gacha-card-back" class="card-back rounded-xl border-4 flex flex-col items-center justify-center p-2 bg-white text-slate-800 shadow-xl">
+                   <!-- Content injected by JS -->
+                 </div>
+               </div>
+             </div>
+
+             <div id="gacha-msg-new" class="hidden text-amber-500 font-black text-lg mb-2 animate-pulse relative z-10" style="text-shadow: 0 0 10px rgba(255, 180, 0, 0.5);">✨ NEW! ✨</div>
+
+             <button id="btn-restart" class="w-full py-3 bg-slate-700 dark:bg-slate-700 text-white rounded-lg font-bold hover:bg-slate-600 transition-colors relative z-10">
+              🏠 MENU
+             </button>
+          </div>
+
         </div>
       </div>
     
