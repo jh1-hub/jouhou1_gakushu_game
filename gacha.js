@@ -51,13 +51,13 @@ export function saveCollection(collection) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
 }
 
-export function drawGacha(distance) {
+export function drawGacha(distance, quizScore) {
   const collection = getCollection();
   
-  // 1. Determine Target Rarity based on Distance
-  // Logic: Higher distance = Better chance for Rare/UR
+  // 1. Determine Target Rarity based on Distance & Quiz Score
   let rarityWeights;
   
+  // Base weights based on Distance
   if (distance < 30) {
     rarityWeights = { 1: 90, 2: 9, 3: 1 };
   } else if (distance < 80) {
@@ -68,6 +68,22 @@ export function drawGacha(distance) {
     // Over 150m (Super Shot)
     rarityWeights = { 1: 10, 2: 40, 3: 50 };
   }
+
+  // --- Apply Quiz Score Restrictions ---
+  
+  if (quizScore <= 5) {
+    // Condition 1: If 5 or less correct, ONLY Common items.
+    rarityWeights = { 1: 100, 2: 0, 3: 0 };
+  } else if (quizScore < 9) {
+    // Condition 2: If less than 9 correct, NO UR items.
+    // Redistribution: Add UR weight to Rare weight.
+    const urWeight = rarityWeights[3];
+    rarityWeights[3] = 0;
+    rarityWeights[2] += urWeight;
+  }
+  // If 9 or more, use base weights (UR is possible)
+
+  // -------------------------------------
 
   const rand = Math.random() * 100;
   let selectedRarity = 1;

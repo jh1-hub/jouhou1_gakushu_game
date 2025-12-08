@@ -11,6 +11,7 @@ const state = {
     wind: 5,
   },
   genreId: null, // Current genre being played
+  quizScore: 0, // Number of correct answers in the last quiz session
   physics: {
     position: { x: 0, y: 0 },
     velocity: { x: 0, y: 0 },
@@ -120,8 +121,8 @@ function handleRestart() {
 }
 
 function handleGacha() {
-  // Execute Gacha
-  const result = drawGacha(state.score);
+  // Execute Gacha (Pass quizScore)
+  const result = drawGacha(state.score, state.quizScore);
   
   // Update UI
   document.getElementById('view-result-score').classList.add('hidden');
@@ -132,6 +133,7 @@ function handleGacha() {
   const card = document.getElementById('gacha-card');
   const cardBack = document.getElementById('gacha-card-back');
   const msgNew = document.getElementById('gacha-msg-new');
+  const effectContainer = document.getElementById('gacha-effect');
   
   // Set content
   cardBack.className = `card-back rounded-xl border-4 flex flex-col items-center justify-center p-2 text-slate-800 rarity-${result.item.rarity}`;
@@ -151,6 +153,15 @@ function handleGacha() {
     msgNew.classList.add('hidden');
   }
 
+  // Visual Effects for Rare/UR
+  effectContainer.className = 'absolute inset-0 pointer-events-none z-0'; // Reset
+  if (result.item.rarity >= 2) {
+      effectContainer.classList.add('gacha-rays');
+      if (result.item.rarity === 3) {
+          effectContainer.classList.add('gacha-rainbow');
+      }
+  }
+
   // Animate Flip
   setTimeout(() => {
      card.classList.add('card-flip');
@@ -167,6 +178,7 @@ export function resetGame() {
   viewGacha.classList.add('hidden');
   viewGacha.classList.remove('flex');
   document.getElementById('gacha-card').classList.remove('card-flip');
+  document.getElementById('gacha-effect').className = 'absolute inset-0 pointer-events-none z-0'; // Reset effects
 
   state.physics.isStopped = true;
   state.physics.position = {x: 0.5, y: 0.15};
@@ -343,12 +355,15 @@ function renderMarkers(cameraX, viewWidth) {
 
 // --- Initialization ---
 
-export function updateParams(newParams, genreId = null) {
+export function updateParams(newParams, genreId = null, quizScore = null) {
   if (newParams) {
     state.params = { ...state.params, ...newParams };
   }
   if (genreId) {
     state.genreId = genreId;
+  }
+  if (quizScore !== null) {
+    state.quizScore = quizScore;
   }
   updateUI();
 }

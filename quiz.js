@@ -866,11 +866,12 @@ function transitionToGame() {
   resetGame();
 
   // 2. Apply New Parameters from Quiz
+  // PASS SCORE TO APP.JS
   updateParams({
     power: bonuses.power,
     loft: bonuses.loft,
     wind: bonuses.wind
-  }, currentGenre.id);
+  }, currentGenre.id, score);
 
   // 3. Update UI Visibility
   els.quizContainer.classList.add('hidden');
