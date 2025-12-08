@@ -22,6 +22,7 @@ const state = {
   particles: [],
   score: 0,
   highScore: 0, // Session best
+  lastGachaItem: null // Added to store the result of the last gacha
 };
 
 let requestID = null;
@@ -123,6 +124,7 @@ function handleRestart() {
 function handleGacha() {
   // Execute Gacha (Pass quizScore and genreId)
   const result = drawGacha(state.score, state.quizScore, state.genreId);
+  state.lastGachaItem = result.item;
   
   // Update UI
   document.getElementById('view-result-score').classList.add('hidden');
@@ -196,6 +198,10 @@ export function resetSessionBest() {
 
 export function launchBall() {
   handleLaunch();
+}
+
+export function getLastGachaItem() {
+    return state.lastGachaItem;
 }
 
 function loop() {

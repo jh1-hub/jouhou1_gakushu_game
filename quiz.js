@@ -1,4 +1,4 @@
-import { initGame, updateParams, setRestartCallback, resetGame, launchBall, resetSessionBest } from './app.js';
+import { initGame, updateParams, setRestartCallback, resetGame, launchBall, resetSessionBest, getLastGachaItem } from './app.js';
 import { ITEM_LIST, getCollection, getCollectionStats } from './gacha.js';
 
 // --- Helper Functions for generating math questions ---
@@ -376,7 +376,15 @@ function init() {
     btnCollection: document.getElementById('btn-collection'),
     btnCloseCollection: document.getElementById('btn-close-collection'),
     valGlobalBest: document.getElementById('val-global-best'),
-    collectionStats: document.getElementById('collection-stats-container')
+    collectionStats: document.getElementById('collection-stats-container'),
+    
+    // Card Detail Modal
+    cardDetailModal: document.getElementById('card-detail-modal'),
+    btnCloseDetail: document.getElementById('btn-close-detail'),
+    cardDetailContent: document.getElementById('card-detail-content'),
+    
+    // Gacha Card
+    gachaCard: document.getElementById('gacha-card')
   };
 
   if (!els.menuContainer || !els.genreGrid) {
@@ -388,10 +396,22 @@ function init() {
   if(els.btnReset) els.btnReset.onclick = resetProgress;
   if(els.btnCollection) els.btnCollection.onclick = openCollection;
   if(els.btnCloseCollection) els.btnCloseCollection.onclick = closeCollection;
+  if(els.btnCloseDetail) els.btnCloseDetail.onclick = closeCardDetail;
   
   // Make stats container clickable
   if(els.collectionStats) {
       els.collectionStats.onclick = openCollection;
+  }
+  
+  // Make Gacha Card clickable for details
+  if(els.gachaCard) {
+      els.gachaCard.onclick = () => {
+          // Check if card is flipped (has result)
+          if(els.gachaCard.classList.contains('card-flip')) {
+              const item = getLastGachaItem();
+              if(item) showCardDetail(item);
+          }
+      };
   }
 
   // Initialize game engine
@@ -460,12 +480,12 @@ function updateGlobalStats() {
             <span class="text-[10px] font-bold text-slate-400 uppercase">Common</span>
             <span class="font-mono font-bold text-sky-500">${colStats.r1.owned}/${colStats.r1.total}</span>
         </div>
-        <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+        <div class="w-px h-8 bg-slate-200 mx-2"></div>
         <div class="flex flex-col items-center">
             <span class="text-[10px] font-bold text-slate-400 uppercase">Rare</span>
             <span class="font-mono font-bold text-amber-500">${colStats.r2.owned}/${colStats.r2.total}</span>
         </div>
-        <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+        <div class="w-px h-8 bg-slate-200 mx-2"></div>
         <div class="flex flex-col items-center">
             <span class="text-[10px] font-bold text-slate-400 uppercase">UR</span>
             <span class="font-mono font-bold text-purple-500">${colStats.r3.owned}/${colStats.r3.total}</span>
@@ -514,28 +534,28 @@ function renderGenreCard(genre, isComprehensive = false) {
   const totalQ = isComprehensive ? 20 : 10; // Session limit
   
   const card = document.createElement('div');
-  const borderClass = isComprehensive ? 'border-amber-400 dark:border-amber-600' : 'border-slate-200 dark:border-slate-700';
+  const borderClass = isComprehensive ? 'border-amber-400' : 'border-slate-200';
   const hoverClass = isComprehensive ? 'hover:border-amber-500 hover:shadow-amber-500/20' : 'hover:border-emerald-500 hover:shadow-emerald-500/20';
   
-  card.className = `bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg ${borderClass} ${hoverClass} hover:-translate-y-1 transition-all cursor-pointer group flex flex-col justify-between h-full`;
+  card.className = `bg-white rounded-2xl p-5 shadow-lg ${borderClass} ${hoverClass} hover:-translate-y-1 transition-all cursor-pointer group flex flex-col justify-between h-full`;
   card.onclick = () => startQuiz(genre);
 
   card.innerHTML = `
     <div>
       <div class="flex items-center justify-between mb-4">
-        <span class="text-3xl bg-slate-100 dark:bg-slate-700 p-3 rounded-xl group-hover:scale-110 transition-transform">${genre.icon}</span>
+        <span class="text-3xl bg-slate-100 p-3 rounded-xl group-hover:scale-110 transition-transform">${genre.icon}</span>
         <div class="text-right">
            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cleared</div>
-           <div class="font-bold text-emerald-600 dark:text-emerald-400 text-xl leading-none">${stats.maxCorrect} <span class="text-slate-400 dark:text-slate-500 text-xs">/ ${totalQ}</span></div>
+           <div class="font-bold text-emerald-600 text-xl leading-none">${stats.maxCorrect} <span class="text-slate-400 text-xs">/ ${totalQ}</span></div>
         </div>
       </div>
-      <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 leading-tight ${isComprehensive ? 'text-amber-600 dark:text-amber-500' : 'group-hover:text-emerald-500 dark:group-hover:text-emerald-400'} transition-colors">${genre.title}</h3>
-      <p class="text-slate-500 dark:text-slate-400 text-xs mb-4 line-clamp-2">${genre.description}</p>
+      <h3 class="text-lg font-bold text-slate-800 mb-2 leading-tight ${isComprehensive ? 'text-amber-600' : 'group-hover:text-emerald-500'} transition-colors">${genre.title}</h3>
+      <p class="text-slate-500 text-xs mb-4 line-clamp-2">${genre.description}</p>
     </div>
     
-    <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 flex justify-between items-center mt-auto border border-slate-100 dark:border-slate-800">
-      <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Best Record</span>
-      <span class="font-mono font-bold text-amber-500 dark:text-amber-400 text-md">${stats.maxDistance.toFixed(1)}m</span>
+    <div class="bg-slate-50 rounded-lg p-3 flex justify-between items-center mt-auto border border-slate-100">
+      <span class="text-[10px] font-bold text-slate-400 uppercase">Best Record</span>
+      <span class="font-mono font-bold text-amber-500 text-md">${stats.maxDistance.toFixed(1)}m</span>
     </div>
   `;
   els.genreGrid.appendChild(card);
@@ -561,21 +581,25 @@ function openCollection() {
     
     const div = document.createElement('div');
     // Rarity styles
-    let borderClass = 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700/50';
+    let borderClass = 'border-slate-200 bg-white';
     if (isOwned) {
-       if (item.rarity === 3) borderClass = 'border-purple-400 bg-purple-50 dark:bg-purple-900/20';
-       if (item.rarity === 2) borderClass = 'border-amber-400 bg-amber-50 dark:bg-amber-900/20';
-       if (item.rarity === 1) borderClass = 'border-sky-400 bg-sky-50 dark:bg-sky-900/20';
+       if (item.rarity === 3) borderClass = 'border-purple-400 bg-purple-50';
+       if (item.rarity === 2) borderClass = 'border-amber-400 bg-amber-50';
+       if (item.rarity === 1) borderClass = 'border-sky-400 bg-sky-50';
     }
 
     // Masking Name
     const displayName = isOwned ? item.name : (item.name.charAt(0) + '***');
 
-    div.className = `aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 text-center transition-all ${borderClass} ${isOwned ? '' : 'opacity-50 grayscale'}`;
+    div.className = `aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 text-center transition-all ${borderClass} ${isOwned ? 'cursor-pointer hover:scale-105 hover:shadow-lg' : 'opacity-50 grayscale'}`;
+    
+    if (isOwned) {
+        div.onclick = () => showCardDetail(item);
+    }
     
     div.innerHTML = `
       <div class="text-3xl mb-1">${isOwned ? item.icon : '🔒'}</div>
-      <div class="text-[10px] font-bold leading-tight ${isOwned ? 'text-slate-800 dark:text-white' : 'text-slate-400'}">${displayName}</div>
+      <div class="text-[10px] font-bold leading-tight ${isOwned ? 'text-slate-800' : 'text-slate-400'}">${displayName}</div>
       ${isOwned && collection[item.id] > 1 ? `<div class="mt-1 text-[9px] bg-black/10 px-1 rounded-full">x${collection[item.id]}</div>` : ''}
     `;
     grid.appendChild(div);
@@ -587,6 +611,45 @@ function openCollection() {
 
 function closeCollection() {
   els.collectionModal.classList.add('hidden');
+}
+
+// --- Card Detail Modal Logic ---
+function showCardDetail(item) {
+    if(!item) return;
+    
+    // Set Rarity Theme
+    const modalBox = els.cardDetailModal.firstElementChild;
+    modalBox.classList.remove('border-sky-400', 'border-amber-400', 'border-purple-400');
+    if (item.rarity === 1) modalBox.classList.add('border-sky-400');
+    if (item.rarity === 2) modalBox.classList.add('border-amber-400');
+    if (item.rarity === 3) modalBox.classList.add('border-purple-400');
+
+    const rarityLabel = item.rarity === 3 ? 'ULTRA RARE' : (item.rarity === 2 ? 'RARE' : 'COMMON');
+    const rarityColor = item.rarity === 3 ? 'text-purple-500' : (item.rarity === 2 ? 'text-amber-500' : 'text-sky-500');
+
+    els.cardDetailContent.innerHTML = `
+         <div class="w-full h-40 bg-slate-50 flex items-center justify-center text-7xl mb-4 relative overflow-hidden">
+             <!-- Simple shine effect background -->
+             <div class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent"></div>
+             <span class="relative z-10 drop-shadow-xl animate-bounce">${item.icon}</span>
+         </div>
+         <div class="p-6 pt-0 w-full">
+           <h3 class="text-2xl font-black text-slate-800 mb-1 leading-tight">${item.name}</h3>
+           <div class="text-xs font-black uppercase tracking-widest ${rarityColor} mb-6 border-b pb-2">${rarityLabel}</div>
+           
+           <div class="text-left bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner">
+             <p class="text-slate-600 text-sm leading-7 whitespace-pre-line font-medium">
+               ${item.flavor || item.desc}
+             </p>
+           </div>
+         </div>
+    `;
+    
+    els.cardDetailModal.classList.remove('hidden');
+}
+
+function closeCardDetail() {
+    els.cardDetailModal.classList.add('hidden');
 }
 
 
@@ -624,10 +687,10 @@ function startQuiz(genre) {
 
 function renderQuizStructure() {
   const isComp = currentGenre.id === 'comprehensive';
-  const headerGradient = isComp ? 'from-amber-500 to-orange-500' : 'from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700';
+  const headerGradient = isComp ? 'from-amber-500 to-orange-500' : 'from-emerald-600 to-teal-600';
 
   els.quizContainer.innerHTML = `
-    <div id="quiz-card" class="max-w-2xl w-full bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-600 overflow-hidden fade-in mx-4 transition-colors duration-300 flex flex-col max-h-[90vh]">
+    <div id="quiz-card" class="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden fade-in mx-4 transition-colors duration-300 flex flex-col max-h-[90vh]">
       <div class="bg-gradient-to-r ${headerGradient} p-4 text-white text-center shadow-md relative shrink-0">
         <button id="btn-quit-quiz" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white font-bold text-xs bg-black/20 px-3 py-1 rounded-full hover:bg-black/30 transition">✕ MENU</button>
         <h1 class="text-lg font-bold tracking-tight mb-1 truncate px-8">${currentGenre.title}</h1>
@@ -638,41 +701,41 @@ function renderQuizStructure() {
       </div>
       
       <div class="p-4 md:p-8 overflow-y-auto flex-grow flex flex-col">
-        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-4 shrink-0">
+        <div class="w-full bg-slate-200 rounded-full h-1.5 mb-4 shrink-0">
           <div id="quiz-progress" class="${isComp ? 'bg-amber-500' : 'bg-emerald-500'} h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         
         <div id="question-area" class="flex-grow flex flex-col">
-          <h2 id="question-text" class="text-base md:text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 md:mb-8 text-center min-h-[3rem] flex items-center justify-center"></h2>
+          <h2 id="question-text" class="text-base md:text-xl font-bold text-slate-800 mb-4 md:mb-8 text-center min-h-[3rem] flex items-center justify-center"></h2>
           <div id="options-grid" class="grid grid-cols-1 gap-2 md:gap-3 mb-4"></div>
         </div>
 
-        <div id="feedback-area" class="hidden text-center mt-auto pt-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
+        <div id="feedback-area" class="hidden text-center mt-auto pt-4 border-t border-slate-200 shrink-0">
           <p id="feedback-text" class="text-lg font-bold mb-3"></p>
-          <button id="btn-next-question" class="w-full md:w-auto px-10 py-3 bg-slate-800 dark:bg-slate-700 text-white rounded-lg font-bold hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-lg border border-transparent dark:border-slate-600">Next</button>
+          <button id="btn-next-question" class="w-full md:w-auto px-10 py-3 bg-slate-800 text-white rounded-lg font-bold hover:bg-slate-700 transition-colors shadow-lg border border-transparent">Next</button>
         </div>
         
         <div id="result-area" class="hidden text-center space-y-4 md:space-y-6 pb-4">
           <div class="text-4xl md:text-5xl mb-2 animate-bounce">🎊</div>
-          <h2 class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white tracking-tight">Stage Clear!</h2>
-          <p class="text-slate-500 dark:text-slate-400">Score: <span id="val-result-score" class="font-bold ${isComp ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'} text-2xl">${score}</span> / ${currentQuestions.length}</p>
+          <h2 class="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">Stage Clear!</h2>
+          <p class="text-slate-500">Score: <span id="val-result-score" class="font-bold ${isComp ? 'text-amber-500' : 'text-emerald-600'} text-2xl">${score}</span> / ${currentQuestions.length}</p>
           
           <div id="review-list-container"></div>
 
-          <div class="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl text-left text-xs md:text-sm text-slate-600 dark:text-slate-300 space-y-2 border border-slate-200 dark:border-slate-700 shadow-inner">
-            <p class="font-bold text-center mb-2 text-base ${isComp ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}">Item Get!</p>
-            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-1">
-              <span>⚡ Power Module</span> <span id="bonus-power" class="font-bold text-lg text-emerald-600 dark:text-emerald-400">+0</span>
+          <div class="bg-slate-50 p-4 rounded-xl text-left text-xs md:text-sm text-slate-600 space-y-2 border border-slate-200 shadow-inner">
+            <p class="font-bold text-center mb-2 text-base ${isComp ? 'text-amber-500' : 'text-emerald-600'}">Item Get!</p>
+            <div class="flex justify-between items-center border-b border-slate-200 pb-1">
+              <span>⚡ Power Module</span> <span id="bonus-power" class="font-bold text-lg text-emerald-600">+0</span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-1">
-              <span>📐 Angle Gear</span> <span id="bonus-loft" class="font-bold text-lg text-emerald-600 dark:text-emerald-400">+0°</span>
+            <div class="flex justify-between items-center border-b border-slate-200 pb-1">
+              <span>📐 Angle Gear</span> <span id="bonus-loft" class="font-bold text-lg text-emerald-600">+0°</span>
             </div>
             <div class="flex justify-between items-center">
-              <span>💨 Assist Fan</span> <span id="bonus-wind" class="font-bold text-lg text-emerald-600 dark:text-emerald-400">+0</span>
+              <span>💨 Assist Fan</span> <span id="bonus-wind" class="font-bold text-lg text-emerald-600">+0</span>
             </div>
           </div>
 
-          <button id="btn-start-game" class="w-full py-3 md:py-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-600 dark:to-teal-600 text-white rounded-xl font-bold text-lg shadow-lg hover:translate-y-[-2px] transition-all border border-emerald-500/50">
+          <button id="btn-start-game" class="w-full py-3 md:py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold text-lg shadow-lg hover:translate-y-[-2px] transition-all border border-emerald-500/50">
             PLAY BONUS GAME 🤖
           </button>
         </div>
@@ -691,8 +754,8 @@ function renderQuestion() {
   // Reset card styles
   const card = document.getElementById('quiz-card');
   if (card) {
-     card.classList.remove('bg-emerald-100', 'dark:bg-emerald-900', 'border-emerald-500', 'bg-rose-100', 'dark:bg-rose-900', 'border-rose-500');
-     card.classList.add('bg-white', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-600');
+     card.classList.remove('bg-emerald-100', 'border-emerald-500', 'bg-rose-100', 'border-rose-500');
+     card.classList.add('bg-white', 'border-slate-200');
   }
 
   // Set start time for speed bonus
@@ -717,7 +780,7 @@ function renderQuestion() {
   // Render options based on shuffled indices
   currentShuffledIndices.forEach((originalIndex, visualIndex) => {
     const btn = document.createElement('button');
-    btn.className = `quiz-option w-full p-3 md:p-4 text-left border-2 border-slate-200 dark:border-slate-700 rounded-xl font-medium text-sm md:text-base text-slate-600 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-white bg-white dark:bg-slate-800 transition-all`;
+    btn.className = `quiz-option w-full p-3 md:p-4 text-left border-2 border-slate-200 rounded-xl font-medium text-sm md:text-base text-slate-600 hover:border-emerald-500 hover:text-emerald-600 bg-white transition-all`;
     btn.textContent = q.options[originalIndex];
     // Pass visualIndex so we can select the button in DOM, but use originalIndex for correctness check
     btn.onclick = () => handleAnswer(visualIndex);
@@ -742,15 +805,15 @@ function handleAnswer(visualIndex) {
   
   // Create Explanation Element
   const expHtml = q.explanation ? 
-    `<div class="mt-2 md:mt-4 p-3 md:p-4 text-xs md:text-sm text-left bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 animate-in fade-in slide-in-from-bottom-2 max-h-32 overflow-y-auto">
+    `<div class="mt-2 md:mt-4 p-3 md:p-4 text-xs md:text-sm text-left bg-slate-50 rounded-lg border border-slate-100 text-slate-600 animate-in fade-in slide-in-from-bottom-2 max-h-32 overflow-y-auto">
        <div class="font-bold text-[10px] uppercase mb-1 opacity-70">💡 Point</div>
        ${q.explanation}
     </div>` : '';
   
   if (isCorrect) {
     // Change card background to green
-    card.classList.remove('bg-white', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-600');
-    card.classList.add('bg-emerald-100', 'dark:bg-emerald-900', 'border-emerald-500');
+    card.classList.remove('bg-white', 'border-slate-200');
+    card.classList.add('bg-emerald-100', 'border-emerald-500');
 
     options[visualIndex].classList.add('correct');
     options[visualIndex].classList.remove('opacity-60');
@@ -783,14 +846,14 @@ function handleAnswer(visualIndex) {
     if (dist.wind > 0) bStr.push(`Assist +${dist.wind}`);
 
     feedbackText.innerHTML = `
-      <span class="text-emerald-600 dark:text-emerald-400 block text-lg md:text-xl mb-1">Correct!</span>
-      <span class="text-amber-500 dark:text-amber-400 text-xs md:text-sm font-bold">✨ ${bStr.join(' ')}</span>
+      <span class="text-emerald-600 block text-lg md:text-xl mb-1">Correct!</span>
+      <span class="text-amber-500 text-xs md:text-sm font-bold">✨ ${bStr.join(' ')}</span>
       ${expHtml}
     `;
   } else {
     // Change card background to red
-    card.classList.remove('bg-white', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-600');
-    card.classList.add('bg-rose-100', 'dark:bg-rose-900', 'border-rose-500');
+    card.classList.remove('bg-white', 'border-slate-200');
+    card.classList.add('bg-rose-100', 'border-rose-500');
 
     options[visualIndex].classList.add('wrong');
     
@@ -801,7 +864,7 @@ function handleAnswer(visualIndex) {
         options[correctVisualIndex].classList.remove('opacity-60');
     }
     
-    feedbackText.innerHTML = `<span class="text-rose-500 dark:text-rose-400 block text-lg md:text-xl">Incorrect...</span>${expHtml}`;
+    feedbackText.innerHTML = `<span class="text-rose-500 block text-lg md:text-xl">Incorrect...</span>${expHtml}`;
     
     // Record Wrong Answer
     wrongAnswers.push({
@@ -855,15 +918,15 @@ function showResults() {
   const container = document.getElementById('review-list-container');
   if (wrongAnswers.length > 0) {
       container.innerHTML = `
-        <div class="mt-4 md:mt-6 bg-rose-50 dark:bg-rose-900/30 p-3 md:p-4 rounded-xl border border-rose-200 dark:border-rose-800 text-left">
-          <h3 class="font-bold text-rose-600 dark:text-rose-400 mb-3 text-xs md:text-sm uppercase flex items-center gap-2"><span>⚠️</span> Review Mistakes</h3>
+        <div class="mt-4 md:mt-6 bg-rose-50 p-3 md:p-4 rounded-xl border border-rose-200 text-left">
+          <h3 class="font-bold text-rose-600 mb-3 text-xs md:text-sm uppercase flex items-center gap-2"><span>⚠️</span> Review Mistakes</h3>
           <div class="space-y-3 max-h-32 md:max-h-40 overflow-y-auto pr-2 text-[10px] md:text-sm custom-scrollbar">
             ${wrongAnswers.map(w => `
-              <div class="border-b border-rose-100 dark:border-rose-800 pb-2 last:border-0 last:pb-0">
-                <p class="font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">${w.q}</p>
+              <div class="border-b border-rose-100 pb-2 last:border-0 last:pb-0">
+                <p class="font-bold text-slate-700 mb-1 leading-snug">${w.q}</p>
                 <div class="flex justify-between items-center">
                    <span class="text-rose-500 line-through decoration-2 opacity-70 truncate max-w-[45%]">${w.selected}</span>
-                   <span class="text-emerald-600 dark:text-emerald-400 font-bold truncate max-w-[45%]">👉 ${w.correct}</span>
+                   <span class="text-emerald-600 font-bold truncate max-w-[45%]">👉 ${w.correct}</span>
                 </div>
               </div>
             `).join('')}
