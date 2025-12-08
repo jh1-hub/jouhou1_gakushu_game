@@ -152,7 +152,7 @@ export function checkComplete() {
 // Cancel (remove) the last acquired item (for reroll)
 export function cancelGachaItem(itemId) {
     const collection = getCollection();
-    if (collection[itemId]) {
+    if (collection[itemId] && collection[itemId] > 0) {
         collection[itemId]--;
         if (collection[itemId] <= 0) {
             delete collection[itemId];

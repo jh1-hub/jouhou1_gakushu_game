@@ -56,13 +56,13 @@ function setStatus(newStatus) {
 
   if (isFlying) {
     els.msgFinished.classList.add('hidden');
-    els.btnSkip.classList.add('hidden'); 
+    if(els.btnSkip) els.btnSkip.classList.add('hidden'); 
   } else if (isFinished) {
     els.msgFinished.classList.remove('hidden'); 
-    els.btnSkip.classList.add('hidden');
+    if(els.btnSkip) els.btnSkip.classList.add('hidden');
   } else {
     els.msgFinished.classList.add('hidden');
-    els.btnSkip.classList.add('hidden');
+    if(els.btnSkip) els.btnSkip.classList.add('hidden');
   }
 }
 
@@ -91,7 +91,7 @@ function handleLaunch() {
   
   if (skipTimeoutID) clearTimeout(skipTimeoutID);
   skipTimeoutID = setTimeout(() => {
-    if (state.status === 'FLYING') {
+    if (state.status === 'FLYING' && els.btnSkip) {
       els.btnSkip.classList.remove('hidden');
     }
   }, 1000);
@@ -126,6 +126,10 @@ function handleGacha() {
 }
 
 function handleReroll() {
+    // Hide button immediately to prevent double clicks
+    const btn = document.getElementById('btn-reroll');
+    if(btn) btn.classList.add('hidden');
+
     if (state.lastGachaItem) {
         cancelGachaItem(state.lastGachaItem.id);
     }
@@ -137,9 +141,12 @@ function handleReroll() {
     const card = document.getElementById('gacha-card');
     card.classList.remove('card-flip');
     
+    // Force Reflow to ensure animation restarts
+    void card.offsetWidth;
+    
     setTimeout(() => {
        updateGachaUI(result, true);
-    }, 200);
+    }, 300);
 }
 
 function updateGachaUI(result, isReroll) {
@@ -219,6 +226,10 @@ export function resetSessionBest() {
 }
 
 export function launchBall() {
+  // Ensure elements are ready before launching
+  if(!els.btnLaunch || !els.svg) {
+      initGame();
+  }
   handleLaunch();
 }
 
@@ -294,7 +305,7 @@ function handleFinish(distance) {
 
   updateUI();
   
-  els.valFinalScore.textContent = state.score.toFixed(2);
+  if(els.valFinalScore) els.valFinalScore.textContent = state.score.toFixed(2);
   
   setStatus('FINISHED');
   cancelAnimationFrame(requestID);
@@ -348,6 +359,35 @@ function renderGame() {
   renderMarkers(cameraX, viewWidth);
 }
 
+function renderParticles(cameraX, viewWidth) {
+  if (!els.grpParticles) return;
+  const html = state.particles.map(p => 
+    `<circle cx="${p.x}" cy="${-p.y}" r="${0.2 * p.life + 0.1}" fill="${p.color}" opacity="${p.life}" />`
+  ).join('');
+  els.grpParticles.innerHTML = html;
+}
+
+function renderMarkers(cameraX, viewWidth) {
+  if (!els.groundMarkers) return;
+  const start = Math.floor(cameraX / 10) * 10;
+  const end = start + viewWidth + 10;
+  let markersHtml = '';
+  markersHtml += `<rect x="${cameraX - 10}" y="0" width="${viewWidth + 20}" height="10" fill="#064e3b" />`;
+  markersHtml += `<line x1="${cameraX - 10}" y1="0" x2="${cameraX + viewWidth + 10}" y2="0" stroke="#047857" stroke-width="0.2" />`;
+
+  for (let i = start; i <= end; i += 10) {
+    if (i === 0) continue;
+    markersHtml += `
+      <g transform="translate(${i}, 0)">
+        <line x1="0" y1="0" x2="0" y2="-2" stroke="#475569" stroke-width="0.1" />
+        <rect x="-1" y="-3" width="2" height="1" fill="#475569" rx="0.2" />
+        <text x="0" y="-2.3" font-size="0.6" fill="#cbd5e1" text-anchor="middle" font-weight="bold">${i}m</text>
+      </g>
+    `;
+  }
+  els.groundMarkers.innerHTML = markersHtml;
+}
+
 // --- Initialization ---
 
 export function updateParams(newParams, genreId = null, quizScore = null, isSpam = false) {
@@ -399,18 +439,14 @@ export function initGame() {
     valFinalScore: document.getElementById('val-final-score'),
   };
 
-  if (!els.btnLaunch || !els.svg) {
-    console.log("Game elements not fully ready, but initGame called.");
-  }
-
-  els.btnLaunch?.addEventListener('click', handleLaunch);
-  els.btnSkip?.addEventListener('click', handleSkip);
-  els.btnRestart?.addEventListener('click', handleRestart);
-  els.btnGachaDraw?.addEventListener('click', handleGacha);
+  // Using property assignment for handlers to act as a robust reset
+  if (els.btnLaunch) els.btnLaunch.onclick = handleLaunch;
+  if (els.btnSkip) els.btnSkip.onclick = handleSkip;
+  if (els.btnRestart) els.btnRestart.onclick = handleRestart;
+  if (els.btnGachaDraw) els.btnGachaDraw.onclick = handleGacha;
   
-  // Setup Reroll Button
   const btnReroll = document.getElementById('btn-reroll');
-  if(btnReroll) btnReroll.addEventListener('click', handleReroll);
+  if(btnReroll) btnReroll.onclick = handleReroll;
 
   state.highScore = 0;
   updateUI();
