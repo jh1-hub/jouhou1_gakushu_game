@@ -4,110 +4,183 @@ import { ITEM_LIST, getCollection, getCollectionStats } from './gacha.js';
 // --- Helper Functions for generating math questions ---
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-// Generator: Units (Bits/Bytes)
+// Helper to generate unique wrong options
+function generateUniqueOptions(correctVal, count, generatorFn) {
+    const options = new Set([correctVal]);
+    let safety = 0;
+    while(options.size < count && safety < 100) {
+        const val = generatorFn();
+        if(val !== correctVal && val >= 0) { // Keep it positive
+            options.add(val);
+        }
+        safety++;
+    }
+    // Fallback if generator fails
+    while(options.size < count) {
+        options.add(correctVal + options.size);
+    }
+    return Array.from(options);
+}
+
+// Generator: Units (Bits/Bytes) - SIMPLIFIED
 function generateUnitQuestions(count = 16) {
   const qs = [];
   for(let i=0; i<count; i++) {
     const type = randomInt(0, 3);
+    
     if(type === 0) {
-      const bits = [4, 8, 16, 32, 64][randomInt(0, 4)];
+      // Question: Patterns in N bits
+      const bits = [1, 2, 3, 4, 8][randomInt(0, 4)]; // Easier numbers
+      const answer = 2 ** bits;
+      
+      const wrongOptions = generateUniqueOptions(answer, 4, () => {
+          // Generate realistic wrong answers
+          const r = randomInt(0, 2);
+          if (r === 0) return 2 ** (bits + randomInt(-1, 1)); // Off by power
+          if (r === 1) return bits * 2; // Linear mistake
+          return bits * bits; // Square mistake
+      });
+
       qs.push({
         q: `${bits}ビットで表現できる情報の種類は何通り？`,
-        options: [`${2**(bits-1)}通り`, `${2**bits}通り`, `${bits*2}通り`, `${bits**2}通り`],
-        a: 1,
-        explanation: `Nビットの情報量は $2^N$ 通りとなります。\n${bits}ビットなら $2^{${bits}} = ${2**bits}$ 通りです。`
+        options: wrongOptions.map(String),
+        a: wrongOptions.indexOf(answer),
+        explanation: `Nビットの情報量は $2^N$ 通りとなります。\n${bits}ビットなら $2^{${bits}} = ${answer}$ 通りです。`
       });
+
     } else if (type === 1) {
-      const bytes = randomInt(1, 10);
+      // Question: Bytes to Bits
+      const bytes = randomInt(1, 5); // Keep small
+      const answer = bytes * 8;
+      
+      const wrongOptions = generateUniqueOptions(answer, 4, () => {
+          return answer + randomInt(-5, 5) * 2; // Random even numbers nearby
+      });
+
       qs.push({
         q: `${bytes}バイトは何ビット？`,
-        options: [`${bytes*4}ビット`, `${bytes*8}ビット`, `${bytes*16}ビット`, `${bytes+8}ビット`],
-        a: 1,
-        explanation: `1バイトは8ビットです。\nしたがって ${bytes} × 8 = ${bytes*8} ビットとなります。`
+        options: wrongOptions.map(v => `${v}ビット`),
+        a: wrongOptions.indexOf(answer),
+        explanation: `1バイトは8ビットです。\nしたがって ${bytes} × 8 = ${answer} ビットとなります。`
       });
+
     } else if (type === 2) {
-      const kb = randomInt(1, 5);
+      // Question: KB to Bytes
+      const kb = randomInt(1, 4);
+      const answer = kb * 1024;
+      
+      const wrongOptions = generateUniqueOptions(answer, 4, () => {
+          const type = randomInt(0, 2);
+          if (type === 0) return kb * 1000; // Decimal mistake
+          if (type === 1) return kb * 100;  // Order of magnitude mistake
+          return answer + randomInt(-100, 100);
+      });
+
       qs.push({
         q: `${kb}KB (キロバイト) は何バイト？ (1KB=1024Bとする)`,
-        options: [`${kb*1000}`, `${kb*1024}`, `${kb*8}`, `${kb*100}`],
-        a: 1,
-        explanation: `情報の世界では $2^{10}=1024$ を単位の区切りとすることが多いです。\n${kb} × 1024 = ${kb*1024} バイトです。`
+        options: wrongOptions.map(String),
+        a: wrongOptions.indexOf(answer),
+        explanation: `情報の世界では $2^{10}=1024$ を単位の区切りとすることが多いです。\n${kb} × 1024 = ${answer} バイトです。`
       });
     } else {
-       const colors = [1, 4, 8, 16, 24];
-       const c = colors[randomInt(0,4)];
+       // Question: Color depth
+       const colors = [1, 4, 8]; // Simple depths
+       const c = colors[randomInt(0, 2)];
+       const answer = 2 ** c;
+       
+       const wrongOptions = generateUniqueOptions(answer, 4, () => {
+           const r = randomInt(0,2);
+           if(r===0) return c * c;
+           if(r===1) return c * 10;
+           return 2 ** (c-1);
+       });
+
        qs.push({
          q: `${c}ビットカラーで表現できる色数は？`,
-         options: [`${2**c}`, `${c*2}`, `${c*c}`, `無限`],
-         a: 0,
-         explanation: `色数もビット数Nに対して $2^N$ で計算できます。\n例：8ビットカラーなら256色、24ビットなら約1677万色です。`
+         options: wrongOptions.map(String),
+         a: wrongOptions.indexOf(answer),
+         explanation: `色数もビット数Nに対して $2^N$ で計算できます。\n例：8ビットカラーなら256色です。`
        });
     }
   }
   return qs;
 }
 
-// Generator: Base Conversion
+// Generator: Base Conversion - SIMPLIFIED
 function generateBaseConvQuestions(count = 16) {
   const qs = [];
   for(let i=0; i<count; i++) {
     const type = randomInt(0, 2);
-    if(type === 0) { // Bin -> Dec
-      const val = randomInt(3, 31);
+    if(type === 0) { // Bin -> Dec (Small numbers 3-15)
+      const val = randomInt(3, 15); 
       const bin = val.toString(2);
+      
+      const wrongOptions = generateUniqueOptions(val, 4, () => val + randomInt(-3, 3));
+
       qs.push({
         q: `2進数「${bin}」を10進数に変換すると？`,
-        options: [(val-1).toString(), val.toString(), (val+1).toString(), (val+2).toString()],
-        a: 1,
-        explanation: `各桁の重み(1, 2, 4, 8...)を足し合わせます。\n例: 101 なら 4+1=5 となります。`
+        options: wrongOptions.map(String),
+        a: wrongOptions.indexOf(val),
+        explanation: `各桁の重み(1, 2, 4, 8...)を足し合わせます。`
       });
-    } else if (type === 1) { // Dec -> Bin
-      const val = randomInt(3, 31);
+
+    } else if (type === 1) { // Dec -> Bin (Small numbers 3-15)
+      const val = randomInt(3, 15);
       const bin = val.toString(2);
-      const fake1 = (val+1).toString(2);
-      const fake2 = (val-1).toString(2);
-      const fake3 = (val+2).toString(2);
+      
+      // Make sure wrong options are valid binaries of similar length
+      const wrongOptions = generateUniqueOptions(bin, 4, () => {
+          let v = val + randomInt(-3, 3);
+          if (v <= 0) v = 1;
+          return v.toString(2);
+      });
+
       qs.push({
         q: `10進数「${val}」を2進数に変換すると？`,
-        options: [fake2, bin, fake1, fake3],
-        a: 1,
+        options: wrongOptions, // Already strings
+        a: wrongOptions.indexOf(bin),
         explanation: `数値を2で割っていき、余りを下から並べると求められます。`
       });
-    } else { // Hex -> Dec
-      const val = randomInt(10, 255);
+
+    } else { // Hex -> Dec (Simple ones like A, F, 10, 1A)
+      const val = [10, 11, 12, 13, 14, 15, 16, 26, 31][randomInt(0, 8)];
       const hex = val.toString(16).toUpperCase();
+      
+      const wrongOptions = generateUniqueOptions(val, 4, () => val + randomInt(-5, 5));
+
       qs.push({
         q: `16進数「${hex}」を10進数で表すと？`,
-        options: [(val-1).toString(), val.toString(), (val+10).toString(), (val*2).toString()],
-        a: 1,
-        explanation: `16進数の1桁は0-9, A-F(10-15)です。\n16の位と1の位を計算して足し合わせます。`
+        options: wrongOptions.map(String),
+        a: wrongOptions.indexOf(val),
+        explanation: `16進数の1桁は0-9, A-F(10-15)です。`
       });
     }
   }
   return qs;
 }
 
-// Generator: Calculation
+// Generator: Calculation - SIMPLIFIED (Simple Addition)
 function generateCalcQuestions(count = 16) {
   const qs = [];
   for(let i=0; i<count; i++) {
-    const a = randomInt(1, 7);
-    const b = randomInt(1, 7);
+    const a = randomInt(1, 5); // Very small numbers
+    const b = randomInt(1, 5);
     const sum = a + b;
-    const aBin = a.toString(2).padStart(4,'0');
-    const bBin = b.toString(2).padStart(4,'0');
-    const sumBin = sum.toString(2).padStart(4,'0');
+    const aBin = a.toString(2);
+    const bBin = b.toString(2);
+    const sumBin = sum.toString(2);
     
-    // Create wrong answers
-    const w1 = (sum+1).toString(2).padStart(4,'0');
-    const w2 = (sum-1).toString(2).padStart(4,'0');
-    const w3 = (sum+2).toString(2).padStart(4,'0');
+    const wrongOptions = generateUniqueOptions(sumBin, 4, () => {
+        let v = sum + randomInt(-2, 2);
+        if (v <= 0) v = 1;
+        return v.toString(2);
+    });
     
     qs.push({
       q: `2進数の計算： ${aBin} + ${bBin} = ?`,
-      options: [w2, sumBin, w1, w3],
-      a: 1,
-      explanation: `1+1=10(2進数) となる桁上がりに注意して計算します。\n(10進数で ${a}+${b}=${sum} なので、${sum}を2進数にすると${sumBin})`
+      options: wrongOptions,
+      a: wrongOptions.indexOf(sumBin),
+      explanation: `10進数で ${a}+${b}=${sum} なので、${sum}を2進数に直します。`
     });
   }
   return qs;
