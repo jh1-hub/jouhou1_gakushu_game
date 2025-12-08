@@ -1,6 +1,6 @@
 import { updatePhysics } from './physics.js';
 import { TIME_STEP } from './constants.js';
-import { drawGacha } from './gacha.js';
+import { drawGacha, cancelGachaItem } from './gacha.js';
 
 // --- State ---
 const state = {
@@ -124,18 +124,41 @@ function handleRestart() {
 function handleGacha() {
   // Execute Gacha (Pass quizScore and genreId)
   const result = drawGacha(state.score, state.quizScore, state.genreId);
+  updateGachaUI(result, false);
+}
+
+function handleReroll() {
+    // Cancel the previous item logic
+    if (state.lastGachaItem) {
+        cancelGachaItem(state.lastGachaItem.id);
+    }
+    
+    // Draw gacha again with isReroll=true
+    const result = drawGacha(state.score, state.quizScore, state.genreId, true);
+    
+    // Reset Card Animation for re-reveal (quick hack)
+    const card = document.getElementById('gacha-card');
+    card.classList.remove('card-flip');
+    
+    setTimeout(() => {
+       updateGachaUI(result, true);
+    }, 200);
+}
+
+function updateGachaUI(result, isReroll) {
   state.lastGachaItem = result.item;
   
-  // Update UI
+  // Update UI Visibility
   document.getElementById('view-result-score').classList.add('hidden');
   const viewGacha = document.getElementById('view-gacha-result');
   viewGacha.classList.remove('hidden');
-  viewGacha.classList.add('flex'); // Add flex since it's removed by hidden
+  viewGacha.classList.add('flex'); 
   
   const card = document.getElementById('gacha-card');
   const cardBack = document.getElementById('gacha-card-back');
   const msgNew = document.getElementById('gacha-msg-new');
   const effectContainer = document.getElementById('gacha-effect');
+  const btnReroll = document.getElementById('btn-reroll');
   
   // Set content
   cardBack.className = `card-back rounded-xl border-4 flex flex-col items-center justify-center p-2 text-slate-800 rarity-${result.item.rarity}`;
@@ -164,6 +187,16 @@ function handleGacha() {
       }
   }
 
+  // Show Reroll Button condition:
+  // 1. Rare or UR (rarity >= 2)
+  // 2. Not New (duplicate) (!result.isNew)
+  // 3. Not already a reroll (!isReroll)
+  if (result.item.rarity >= 2 && !result.isNew && !isReroll) {
+      btnReroll.classList.remove('hidden');
+  } else {
+      btnReroll.classList.add('hidden');
+  }
+
   // Animate Flip
   setTimeout(() => {
      card.classList.add('card-flip');
@@ -181,6 +214,7 @@ export function resetGame() {
   viewGacha.classList.remove('flex');
   document.getElementById('gacha-card').classList.remove('card-flip');
   document.getElementById('gacha-effect').className = 'absolute inset-0 pointer-events-none z-0'; // Reset effects
+  document.getElementById('btn-reroll').classList.add('hidden'); // Reset reroll button
 
   state.physics.isStopped = true;
   state.physics.position = {x: 0.5, y: 0.15};
@@ -418,6 +452,10 @@ export function initGame() {
   els.btnSkip?.addEventListener('click', handleSkip);
   els.btnRestart?.addEventListener('click', handleRestart);
   els.btnGachaDraw?.addEventListener('click', handleGacha);
+  
+  // Setup Reroll Button
+  const btnReroll = document.getElementById('btn-reroll');
+  if(btnReroll) btnReroll.addEventListener('click', handleReroll);
 
   state.highScore = 0;
   updateUI();
