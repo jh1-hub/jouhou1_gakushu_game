@@ -489,13 +489,25 @@ function resetProgress() {
 function initTheme() {
   const stored = localStorage.getItem('app_theme');
   const html = document.documentElement;
-  // Default to dark if not set
-  if (stored === 'light') {
-    html.classList.remove('dark');
-    updateThemeIcon(false);
+  
+  // If stored, use it. If not, check system preference.
+  if (stored) {
+      if (stored === 'light') {
+          html.classList.remove('dark');
+          updateThemeIcon(false);
+      } else {
+          html.classList.add('dark');
+          updateThemeIcon(true);
+      }
   } else {
-    html.classList.add('dark');
-    updateThemeIcon(true);
+      // Check System Preference
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          html.classList.add('dark');
+          updateThemeIcon(true);
+      } else {
+          html.classList.remove('dark');
+          updateThemeIcon(false);
+      }
   }
 }
 
@@ -594,11 +606,14 @@ function openCollection() {
        if (item.rarity === 1) borderClass = 'border-sky-400 bg-sky-50 dark:bg-sky-900/20';
     }
 
+    // Masking Name
+    const displayName = isOwned ? item.name : (item.name.charAt(0) + '***');
+
     div.className = `aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 text-center transition-all ${borderClass} ${isOwned ? '' : 'opacity-50 grayscale'}`;
     
     div.innerHTML = `
       <div class="text-3xl mb-1">${isOwned ? item.icon : '🔒'}</div>
-      <div class="text-[10px] font-bold leading-tight ${isOwned ? 'text-slate-800 dark:text-white' : 'text-slate-400'}">${item.name}</div>
+      <div class="text-[10px] font-bold leading-tight ${isOwned ? 'text-slate-800 dark:text-white' : 'text-slate-400'}">${displayName}</div>
       ${isOwned && collection[item.id] > 1 ? `<div class="mt-1 text-[9px] bg-black/10 px-1 rounded-full">x${collection[item.id]}</div>` : ''}
     `;
     grid.appendChild(div);
