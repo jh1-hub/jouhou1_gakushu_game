@@ -195,88 +195,95 @@ function recordVocabStat(itemId, isCorrect) {
   localStorage.setItem('golf_vocab_stats', JSON.stringify(stats));
 }
 
+// Helper to generate a single vocab question of a specific type (A or B)
+function makeVocabQuestion(targetItem, type) {
+  const descIdx = Math.floor(Math.random() * 3);
+  const targetDesc = targetItem.explanations[descIdx];
+  const correctText = targetItem.name;
+  const genreId = targetItem.genre_id;
+  const itemsInGenre = ITEM_LIST.filter(item => item.genre_id === genreId);
+
+  if (type === 'explanation_to_word') {
+    // Type A: Explanation -> Word
+    const sameGenreWrong = itemsInGenre.filter(item => item.id !== targetItem.id);
+    let wrongOptions = [];
+    const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
+    wrongOptions.push(...shuffledSameGenre.map(item => item.name));
+    
+    if (wrongOptions.length < 3) {
+      const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
+      const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
+      for (let item of shuffledOther) {
+        if (wrongOptions.length >= 3) break;
+        if (!wrongOptions.includes(item.name)) {
+          wrongOptions.push(item.name);
+        }
+      }
+    } else {
+      wrongOptions = wrongOptions.slice(0, 3);
+    }
+    
+    const options = [correctText, ...wrongOptions];
+    const shuffledOptions = options.sort(() => 0.5 - Math.random());
+    const correctIdx = shuffledOptions.indexOf(correctText);
+    
+    return {
+      q: targetDesc,
+      options: shuffledOptions,
+      a: correctIdx,
+      genre_id: genreId,
+      item_id: targetItem.id,
+      vocab_type: 'explanation_to_word'
+    };
+  } else {
+    // Type B: Word -> Explanation
+    const correctExplain = targetDesc;
+    const sameGenreWrong = itemsInGenre.filter(item => item.id !== targetItem.id);
+    let wrongOptions = [];
+    const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
+    
+    for (const item of shuffledSameGenre) {
+      const randExp = item.explanations[Math.floor(Math.random() * 3)];
+      wrongOptions.push(randExp);
+    }
+    
+    if (wrongOptions.length < 3) {
+      const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
+      const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
+      for (let item of shuffledOther) {
+        if (wrongOptions.length >= 3) break;
+        const randExp = item.explanations[Math.floor(Math.random() * 3)];
+        if (!wrongOptions.includes(randExp)) {
+          wrongOptions.push(randExp);
+        }
+      }
+    } else {
+      wrongOptions = wrongOptions.slice(0, 3);
+    }
+    
+    const options = [correctExplain, ...wrongOptions];
+    const shuffledOptions = options.sort(() => 0.5 - Math.random());
+    const correctIdx = shuffledOptions.indexOf(correctExplain);
+    
+    return {
+      q: `用語「${correctText}」の説明として最も適切なものはどれか。`,
+      options: shuffledOptions,
+      a: correctIdx,
+      genre_id: genreId,
+      item_id: targetItem.id,
+      vocab_type: 'word_to_explanation'
+    };
+  }
+}
+
 // Low-level helper to transform a list of item objects to 4-option quiz questions
 function generateVocabQuestionsForItems(itemsToUse) {
   const qs = [];
+  const startMode = Math.random() < 0.5;
   for (let i = 0; i < itemsToUse.length; i++) {
     const targetItem = itemsToUse[i];
-    const descIdx = Math.floor(Math.random() * 3);
-    const targetDesc = targetItem.explanations[descIdx];
-    const correctText = targetItem.name;
-    const genreId = targetItem.genre_id;
-    
-    const itemsInGenre = ITEM_LIST.filter(item => item.genre_id === genreId);
-    const isWordToDesc = Math.random() < 0.5;
-    
-    if (!isWordToDesc) {
-      // Type A: Explanation -> Word
-      const sameGenreWrong = itemsInGenre.filter(item => item.id !== targetItem.id);
-      let wrongOptions = [];
-      const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
-      wrongOptions.push(...shuffledSameGenre.map(item => item.name));
-      
-      if (wrongOptions.length < 3) {
-        const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
-        const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
-        for (let item of shuffledOther) {
-          if (wrongOptions.length >= 3) break;
-          if (!wrongOptions.includes(item.name)) {
-            wrongOptions.push(item.name);
-          }
-        }
-      } else {
-        wrongOptions = wrongOptions.slice(0, 3);
-      }
-      
-      const options = [correctText, ...wrongOptions];
-      const shuffledOptions = options.sort(() => 0.5 - Math.random());
-      const correctIdx = shuffledOptions.indexOf(correctText);
-      
-      qs.push({
-        q: targetDesc,
-        options: shuffledOptions,
-        a: correctIdx,
-        genre_id: genreId,
-        item_id: targetItem.id
-      });
-    } else {
-      // Type B: Word -> Explanation
-      const correctExplain = targetDesc;
-      const sameGenreWrong = itemsInGenre.filter(item => item.id !== targetItem.id);
-      let wrongOptions = [];
-      const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
-      
-      for (const item of shuffledSameGenre) {
-        const randExp = item.explanations[Math.floor(Math.random() * 3)];
-        wrongOptions.push(randExp);
-      }
-      
-      if (wrongOptions.length < 3) {
-        const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
-        const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
-        for (let item of shuffledOther) {
-          if (wrongOptions.length >= 3) break;
-          const randExp = item.explanations[Math.floor(Math.random() * 3)];
-          if (!wrongOptions.includes(randExp)) {
-            wrongOptions.push(randExp);
-          }
-        }
-      } else {
-        wrongOptions = wrongOptions.slice(0, 3);
-      }
-      
-      const options = [correctExplain, ...wrongOptions];
-      const shuffledOptions = options.sort(() => 0.5 - Math.random());
-      const correctIdx = shuffledOptions.indexOf(correctExplain);
-      
-      qs.push({
-        q: `用語「${correctText}」の説明として最も適切なものはどれか。`,
-        options: shuffledOptions,
-        a: correctIdx,
-        genre_id: genreId,
-        item_id: targetItem.id
-      });
-    }
+    const type = (startMode ? (i % 2 === 0) : (i % 2 !== 0)) ? 'word_to_explanation' : 'explanation_to_word';
+    qs.push(makeVocabQuestion(targetItem, type));
   }
   return qs;
 }
@@ -1133,6 +1140,21 @@ function startQuiz(genre) {
         currentQuestions = generateVocabularyQuestions(genre.id, 5);
     }
   }
+  
+  // Ensure vocab questions in the finalized currentQuestions set are strictly alternating between Type A and Type B
+  let vocabCount = 0;
+  const startMode = Math.random() < 0.5;
+  currentQuestions = currentQuestions.map(q => {
+    if (q.item_id !== undefined) {
+      const targetItem = ITEM_LIST.find(item => item.id === q.item_id);
+      if (targetItem) {
+        const type = (startMode ? (vocabCount % 2 === 0) : (vocabCount % 2 !== 0)) ? 'word_to_explanation' : 'explanation_to_word';
+        vocabCount++;
+        return makeVocabQuestion(targetItem, type);
+      }
+    }
+    return q;
+  });
   
   currentQuestionIndex = 0;
   score = 0;
