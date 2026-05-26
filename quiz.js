@@ -32,16 +32,22 @@ function generateUniqueOptions(correctVal, count, generatorFn) {
     return Array.from(options);
 }
 
-// Generator: Units (Bits/Bytes) - SIMPLIFIED
+// Generator: Units (Bits/Bytes) - SIMPLIFIED & UNIQUE
 function generateUnitQuestions(count = 10) {
   const qs = [];
-  for(let i=0; i<count; i++) {
+  const parametersUsed = new Set();
+  let safety = 0;
+  while(qs.length < count && safety < 100) {
+    safety++;
     const type = randomInt(0, 2);
     
     if(type === 0) {
       const bits = [1, 2, 3, 4, 8][randomInt(0, 4)];
-      const answer = 2 ** bits;
+      const paramKey = `bits_${bits}`;
+      if (parametersUsed.has(paramKey)) continue;
+      parametersUsed.add(paramKey);
       
+      const answer = 2 ** bits;
       const wrongOptions = generateUniqueOptions(answer, 4, () => {
           const r = randomInt(0, 2);
           if (r === 0) return 2 ** (bits + randomInt(-1, 1));
@@ -56,9 +62,12 @@ function generateUnitQuestions(count = 10) {
       });
 
     } else if (type === 1) {
-      const bytes = randomInt(1, 5);
-      const answer = bytes * 8;
+      const bytes = randomInt(1, 10);
+      const paramKey = `bytes_${bytes}`;
+      if (parametersUsed.has(paramKey)) continue;
+      parametersUsed.add(paramKey);
       
+      const answer = bytes * 8;
       const wrongOptions = generateUniqueOptions(answer, 4, () => {
           return answer + randomInt(-5, 5) * 2;
       });
@@ -70,12 +79,15 @@ function generateUnitQuestions(count = 10) {
       });
 
     } else {
-      const kb = randomInt(1, 4);
-      const answer = kb * 1024;
+      const kb = randomInt(1, 8);
+      const paramKey = `kb_${kb}`;
+      if (parametersUsed.has(paramKey)) continue;
+      parametersUsed.add(paramKey);
       
+      const answer = kb * 1024;
       const wrongOptions = generateUniqueOptions(answer, 4, () => {
-          const type = randomInt(0, 1);
-          if (type === 0) return kb * 1000;
+          const typeSub = randomInt(0, 1);
+          if (typeSub === 0) return kb * 1000;
           return answer + randomInt(-100, 100);
       });
 
@@ -86,18 +98,33 @@ function generateUnitQuestions(count = 10) {
       });
     }
   }
+  
+  // Robust fallback to meet count requirements
+  while (qs.length < count) {
+    qs.push({
+      q: `1バイトは何ビットか。`,
+      options: ["2ビット", "4ビット", "8ビット", "16ビット"],
+      a: 2
+    });
+  }
   return qs;
 }
 
-// Generator: Base Conversion - SIMPLIFIED
+// Generator: Base Conversion - SIMPLIFIED & UNIQUE
 function generateBaseConvQuestions(count = 10) {
   const qs = [];
-  for(let i=0; i<count; i++) {
+  const numbersUsed = new Set();
+  let safety = 0;
+  while(qs.length < count && safety < 100) {
+    safety++;
     const type = randomInt(0, 2);
     if(type === 0) { // Bin -> Dec (Small numbers 3-15)
       const val = randomInt(3, 15); 
-      const bin = val.toString(2);
+      const paramKey = `bin_${val}`;
+      if (numbersUsed.has(paramKey)) continue;
+      numbersUsed.add(paramKey);
       
+      const bin = val.toString(2);
       const wrongOptions = generateUniqueOptions(val, 4, () => val + randomInt(-3, 3));
 
       qs.push({
@@ -108,8 +135,11 @@ function generateBaseConvQuestions(count = 10) {
 
     } else if (type === 1) { // Dec -> Bin (Small numbers 3-15)
       const val = randomInt(3, 15);
-      const bin = val.toString(2);
+      const paramKey = `dec_${val}`;
+      if (numbersUsed.has(paramKey)) continue;
+      numbersUsed.add(paramKey);
       
+      const bin = val.toString(2);
       const wrongOptions = generateUniqueOptions(bin, 4, () => {
           let v = val + randomInt(-3, 3);
           if (v <= 0) v = 1;
@@ -122,10 +152,13 @@ function generateBaseConvQuestions(count = 10) {
         a: wrongOptions.indexOf(bin)
       });
 
-    } else { // Hex -> Dec (Simple ones like A, F, 10)
-      const val = [10, 11, 12, 13, 14, 15, 16][randomInt(0, 6)];
-      const hex = val.toString(16).toUpperCase();
+    } else { // Hex -> Dec (Simple ones like A, F, 10, etc.)
+      const val = [10, 11, 12, 13, 14, 15, 16, 17, 18, 20][randomInt(0, 9)];
+      const paramKey = `hex_${val}`;
+      if (numbersUsed.has(paramKey)) continue;
+      numbersUsed.add(paramKey);
       
+      const hex = val.toString(16).toUpperCase();
       const wrongOptions = generateUniqueOptions(val, 4, () => val + randomInt(-3, 3));
 
       qs.push({
@@ -135,61 +168,112 @@ function generateBaseConvQuestions(count = 10) {
       });
     }
   }
+  
+  // Fallback
+  while(qs.length < count) {
+    qs.push({
+      q: `10進数「10」を2進数に変換した値は何か。`,
+      options: ["1000", "1010", "1100", "1111"],
+      a: 1
+    });
+  }
   return qs;
 }
 
-// Generate Vocab Questions dynamically based on selected genre (Always 4-options, term guessing)
+// Generate Vocab Questions dynamically based on selected genre (Always 4-options, mixed QA type)
 function generateVocabularyQuestions(genreId, count = 5) {
   const items = ITEM_LIST.filter(item => item.genre_id === genreId);
   if (items.length === 0) return [];
 
+  // Shuffle items to ensure UNIQUENESS in the session
+  const shuffledItems = [...items].sort(() => 0.5 - Math.random());
+  
   const qs = [];
-  for (let i = 0; i < count; i++) {
-    const targetItem = items[Math.floor(Math.random() * items.length)];
+  const itemsToUse = shuffledItems.slice(0, Math.min(count, shuffledItems.length));
+  
+  for (let i = 0; i < itemsToUse.length; i++) {
+    const targetItem = itemsToUse[i];
     const descIdx = Math.floor(Math.random() * 3);
     const targetDesc = targetItem.explanations[descIdx];
-    
-    // Target Term is correct answer
     const correctText = targetItem.name;
     
-    // Choose 3 unique dummy options prioritising same genre
-    const sameGenreWrong = items.filter(item => item.id !== targetItem.id);
-    let wrongOptions = [];
+    // Choose pattern: 50% explanation-to-word, 50% word-to-explanation
+    const isWordToDesc = Math.random() < 0.5;
     
-    // Shuffle same genre options and extract names
-    const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
-    wrongOptions.push(...shuffledSameGenre.map(item => item.name));
-    
-    // If not enough (which won't happen here, but acts as a robust fallback), top up from others
-    if (wrongOptions.length < 3) {
-      const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
-      const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
-      for (let item of shuffledOther) {
-        if (wrongOptions.length >= 3) break;
-        if (!wrongOptions.includes(item.name)) {
-          wrongOptions.push(item.name);
+    if (!isWordToDesc) {
+      // Type A: Explanation -> Word
+      const sameGenreWrong = items.filter(item => item.id !== targetItem.id);
+      let wrongOptions = [];
+      const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
+      wrongOptions.push(...shuffledSameGenre.map(item => item.name));
+      
+      if (wrongOptions.length < 3) {
+        const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
+        const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
+        for (let item of shuffledOther) {
+          if (wrongOptions.length >= 3) break;
+          if (!wrongOptions.includes(item.name)) {
+            wrongOptions.push(item.name);
+          }
         }
+      } else {
+        wrongOptions = wrongOptions.slice(0, 3);
       }
+      
+      const options = [correctText, ...wrongOptions];
+      const shuffledOptions = options.sort(() => 0.5 - Math.random());
+      const correctIdx = shuffledOptions.indexOf(correctText);
+      
+      qs.push({
+        q: targetDesc,
+        options: shuffledOptions,
+        a: correctIdx,
+        genre_id: genreId
+      });
     } else {
-      wrongOptions = wrongOptions.slice(0, 3);
+      // Type B: Word -> Explanation
+      const correctExplain = targetDesc;
+      
+      const sameGenreWrong = items.filter(item => item.id !== targetItem.id);
+      let wrongOptions = [];
+      const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
+      
+      for (const item of shuffledSameGenre) {
+        const randExp = item.explanations[Math.floor(Math.random() * 3)];
+        wrongOptions.push(randExp);
+      }
+      
+      if (wrongOptions.length < 3) {
+        const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
+        const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
+        for (let item of shuffledOther) {
+          if (wrongOptions.length >= 3) break;
+          const randExp = item.explanations[Math.floor(Math.random() * 3)];
+          if (!wrongOptions.includes(randExp)) {
+            wrongOptions.push(randExp);
+          }
+        }
+      } else {
+        wrongOptions = wrongOptions.slice(0, 3);
+      }
+      
+      const options = [correctExplain, ...wrongOptions];
+      const shuffledOptions = options.sort(() => 0.5 - Math.random());
+      const correctIdx = shuffledOptions.indexOf(correctExplain);
+      
+      qs.push({
+        q: `用語「${correctText}」の説明として最も適切なものはどれか。`,
+        options: shuffledOptions,
+        a: correctIdx,
+        genre_id: genreId
+      });
     }
-    
-    const options = [correctText, ...wrongOptions];
-    const shuffledOptions = options.sort(() => 0.5 - Math.random());
-    const correctIdx = shuffledOptions.indexOf(correctText);
-    
-    qs.push({
-      q: targetDesc,
-      options: shuffledOptions,
-      a: correctIdx,
-      genre_id: genreId
-    });
   }
   
   return qs;
 }
 
-// --- Quiz Data Structure: 10 Genres ---
+// --- Quiz Data Structure: 7 Consolidated Genres ---
 const genres = [
   {
     id: 'info_unit_base',
@@ -199,59 +283,45 @@ const genres = [
     questions: []
   },
   {
-    id: '01_info_media',
-    title: '01 情報とメディアの特性',
+    id: '01_02_info_media_solving',
+    title: '01・02 情報の特性と問題解決',
     icon: '💡',
-    description: '一次情報・二次情報、メディアリテラシー、残存性、複製性などの特性',
-    questions: []
-  },
-  {
-    id: '02_prob_solving',
-    title: '02 問題解決',
-    icon: '📊',
-    description: '問題解決、MECE（ミーシー）、PDCAサイクル、KJ法、トレードオフ、ブレインストーミング',
+    description: '一次・二次・三次情報、情報の残存性・複製性・伝播性、ブレーンストーミング、KJ法、MECE、ロジックツリー、ガントチャートによる進捗管理',
     questions: []
   },
   {
     id: '03_04_moral_personal',
     title: '03・04 情報モラルと個人情報',
     icon: '👤',
-    description: '情報モラルの基本、デジタルデバイド、フィルターバブル、エコーチェンバー、ネット依存、個人情報定義、個人識別符号、肖像権、ジオタグ等、プライバシーポリシー',
+    description: '情報モラルの基本、デジタルデバイド、フィルターバブル、エコーチェンバー、ネット依存、個人情報定義、個人識別符号、肖像権、ジオタグ、プライバシーポリシー',
     questions: []
   },
   {
     id: '05_intellectual_property',
     title: '05 知的財産権',
     icon: '🎨',
-    description: '産業財産権（特許・意匠等）と著作権、方式・無方式主義、パブリックドメイン、ライセンス契約',
+    description: '産業財産権（特許・実用新案・意匠・商標）と著作権、方式・無方式主義、著作者人格権、同一性保持権、複製権、パブリックドメイン、クリエイティブコモンズ',
     questions: []
   },
   {
     id: '06_info_security',
     title: '06 情報セキュリティ',
     icon: '🔒',
-    description: '機密性・完全性・可用性、マルウェア、ソーシャルエンジニアリング、ファイアウォール',
+    description: 'セキュリティの3大要素（機密性・完全性・可用性）、マルウェア、フィッシング詐欺、ファイアウォール、公開鍵暗号システム',
     questions: []
   },
   {
     id: '07_info_tech_dev',
     title: '07 情報技術の発展',
     icon: '📶',
-    description: '生活を支えるPOS、IoT、AI(人工知能)の学習と Society5.0、クラウドサービス',
+    description: '生活を支えるPOS、IoT、GPS位置測定、人工知能、Society 5.0、クラウドサービス、機械学習、ビッグデータ',
     questions: []
   },
   {
-    id: '08_media_comm',
-    title: '08 メディアとコミュニケーション',
+    id: '08_09_media_design',
+    title: '08・09 メディアと情報デザイン',
     icon: '📞',
-    description: '同期・非同期型、マスメディアとソーシャルメディア（SNS）、炎上現象',
-    questions: []
-  },
-  {
-    id: '09_info_design',
-    title: '09 情報デザイン',
-    icon: '🖌️',
-    description: '情報デザインアプローチ、認知を助けるピクトグラム、ユニバーサルデザイン、GUI、インフォグラフィック',
+    description: '同期・非同期型、マスメディアとSNS、双方向コミュニケーション、情報デザイン、ピクトグラム、ユニバーサルデザイン、アフォーダンス、シグニファイア、GUI',
     questions: []
   }
 ];
@@ -1161,6 +1231,26 @@ function generateReportCanvas() {
   localStorage.setItem('golf_submit_user_number', number);
   localStorage.setItem('golf_submit_user_name', name);
 
+  // Validate inputs
+  const isValid = grade !== "" && className !== "" && number !== "" && name !== "";
+  if (els.btnDownloadReport) {
+    if (isValid) {
+      els.btnDownloadReport.disabled = false;
+      els.btnDownloadReport.className = "px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-lg shadow-md hover:from-emerald-600 hover:to-teal-600 text-xs flex items-center gap-1.5 cursor-pointer opacity-100 transition-all";
+    } else {
+      els.btnDownloadReport.disabled = true;
+      els.btnDownloadReport.className = "px-6 py-2 bg-slate-300 text-slate-500 font-bold rounded-lg text-xs flex items-center gap-1.5 cursor-not-allowed opacity-60 pointer-events-none transition-all";
+    }
+  }
+  const warningLabel = document.getElementById('submit-warning-msg');
+  if (warningLabel) {
+    if (isValid) {
+      warningLabel.classList.add('hidden');
+    } else {
+      warningLabel.classList.remove('hidden');
+    }
+  }
+
   // Clear Canvas
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -1349,9 +1439,11 @@ function generateReportCanvas() {
 
     // Accuracy numbers and colors (Centered at 540)
     ctx.textAlign = 'center';
-    ctx.fillStyle = maxCorrect >= 8 ? '#059669' : (maxCorrect > 0 ? '#4F46E5' : '#9CA3AF');
+    const totalQOfGenre = (genre.id === 'comprehensive') ? 10 : 5;
+    const isExcellent = (genre.id === 'comprehensive') ? (maxCorrect >= 8) : (maxCorrect >= 4);
+    ctx.fillStyle = isExcellent ? '#059669' : (maxCorrect > 0 ? '#4F46E5' : '#9CA3AF');
     ctx.font = 'bold 13px sans-serif';
-    ctx.fillText(`${maxCorrect} / 10 問`, 540, currentY + 35);
+    ctx.fillText(`${maxCorrect} / ${totalQOfGenre} 問`, 540, currentY + 35);
 
     // High Score Meter (Centered at 675)
     ctx.fillStyle = maxDistance > 0 ? '#111827' : '#9CA3AF';
