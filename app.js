@@ -12,6 +12,7 @@ const state = {
   },
   genreId: null, 
   quizScore: 0, 
+  quizTotal: 10, 
   isSpam: false, // NEW: Flag for spam detection
   physics: {
     position: { x: 0, y: 0 },
@@ -121,7 +122,7 @@ function handleRestart() {
 }
 
 function handleGacha() {
-  const result = drawGacha(state.score, state.quizScore, state.genreId, false, state.isSpam);
+  const result = drawGacha(state.score, state.quizScore, state.quizTotal, state.genreId, false, state.isSpam);
   updateGachaUI(result, false);
 }
 
@@ -135,7 +136,7 @@ function handleReroll() {
     }
     
     // Draw gacha again with isReroll=true. Keep isSpam (if spamming, you just get duplicates anyway)
-    const result = drawGacha(state.score, state.quizScore, state.genreId, true, state.isSpam);
+    const result = drawGacha(state.score, state.quizScore, state.quizTotal, state.genreId, true, state.isSpam);
     
     // Reset Card Animation for re-reveal
     const card = document.getElementById('gacha-card');
@@ -396,7 +397,7 @@ function renderMarkers(cameraX, viewWidth) {
 
 // --- Initialization ---
 
-export function updateParams(newParams, genreId = null, quizScore = null, isSpam = false) {
+export function updateParams(newParams, genreId = null, quizScore = null, isSpam = false, quizTotal = 10) {
   if (newParams) {
     state.params = { ...state.params, ...newParams };
   }
@@ -405,6 +406,9 @@ export function updateParams(newParams, genreId = null, quizScore = null, isSpam
   }
   if (quizScore !== null) {
     state.quizScore = quizScore;
+  }
+  if (quizTotal !== null) {
+    state.quizTotal = quizTotal;
   }
   state.isSpam = isSpam;
   

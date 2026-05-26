@@ -1,5 +1,8 @@
 {
   "name": "+card学習ドリル＆ボール投げGame",
   "description": "A physics-based throwing game where you adjust power, bounce limit, and wind to achieve the maximum distance.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

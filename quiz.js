@@ -1,6 +1,17 @@
 import { initGame, updateParams, setRestartCallback, resetGame, launchBall, resetSessionBest, getLastGachaItem } from './app.js';
 import { ITEM_LIST, getCollection, getCollectionStats, checkComplete } from './gacha.js';
 
+// --- CENTRALIZED EXAM CONFIGURATION (Change this for easy reuse in 2nd term or other subjects) ---
+const EXAM_CONFIG = {
+  subjectName: "情報Ⅰ",
+  termName: "1学期末考査", // Change to "2学期末考査", "2学期中間考査", etc. for subsequent exams
+  reportTitleSuffix: "対策 学習成果レポート",
+  reportSubtitleSuffix: "授業提出レポート"
+};
+
+// --- Timer reference for countdown control ---
+let nextButtonTimer = null;
+
 // --- Helper Functions for generating math questions ---
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -15,7 +26,6 @@ function generateUniqueOptions(correctVal, count, generatorFn) {
         }
         safety++;
     }
-    // Fallback if generator fails
     while(options.size < count) {
         options.add(correctVal + options.size);
     }
@@ -23,91 +33,64 @@ function generateUniqueOptions(correctVal, count, generatorFn) {
 }
 
 // Generator: Units (Bits/Bytes) - SIMPLIFIED
-function generateUnitQuestions(count = 16) {
+function generateUnitQuestions(count = 10) {
   const qs = [];
   for(let i=0; i<count; i++) {
-    const type = randomInt(0, 3);
+    const type = randomInt(0, 2);
     
     if(type === 0) {
-      // Question: Patterns in N bits
-      const bits = [1, 2, 3, 4, 8][randomInt(0, 4)]; // Easier numbers
+      const bits = [1, 2, 3, 4, 8][randomInt(0, 4)];
       const answer = 2 ** bits;
       
       const wrongOptions = generateUniqueOptions(answer, 4, () => {
-          // Generate realistic wrong answers
           const r = randomInt(0, 2);
-          if (r === 0) return 2 ** (bits + randomInt(-1, 1)); // Off by power
-          if (r === 1) return bits * 2; // Linear mistake
-          return bits * bits; // Square mistake
+          if (r === 0) return 2 ** (bits + randomInt(-1, 1));
+          if (r === 1) return bits * 2;
+          return bits * bits;
       });
 
       qs.push({
-        q: `${bits}ビットで表現できる情報の種類は何通り？`,
+        q: `${bits}ビットで表現できる情報の種類は何通りか。`,
         options: wrongOptions.map(String),
-        a: wrongOptions.indexOf(answer),
-        explanation: `Nビットの情報量は $2^N$ 通りとなります。\n${bits}ビットなら $2^{${bits}} = ${answer}$ 通りです。`
+        a: wrongOptions.indexOf(answer)
       });
 
     } else if (type === 1) {
-      // Question: Bytes to Bits
-      const bytes = randomInt(1, 5); // Keep small
+      const bytes = randomInt(1, 5);
       const answer = bytes * 8;
       
       const wrongOptions = generateUniqueOptions(answer, 4, () => {
-          return answer + randomInt(-5, 5) * 2; // Random even numbers nearby
+          return answer + randomInt(-5, 5) * 2;
       });
 
       qs.push({
-        q: `${bytes}バイトは何ビット？`,
+        q: `${bytes}バイトは何ビットか。`,
         options: wrongOptions.map(v => `${v}ビット`),
-        a: wrongOptions.indexOf(answer),
-        explanation: `1バイトは8ビットです。\nしたがって ${bytes} × 8 = ${answer} ビットとなります。`
+        a: wrongOptions.indexOf(answer)
       });
 
-    } else if (type === 2) {
-      // Question: KB to Bytes
+    } else {
       const kb = randomInt(1, 4);
       const answer = kb * 1024;
       
       const wrongOptions = generateUniqueOptions(answer, 4, () => {
-          const type = randomInt(0, 2);
-          if (type === 0) return kb * 1000; // Decimal mistake
-          if (type === 1) return kb * 100;  // Order of magnitude mistake
+          const type = randomInt(0, 1);
+          if (type === 0) return kb * 1000;
           return answer + randomInt(-100, 100);
       });
 
       qs.push({
-        q: `${kb}KB (キロバイト) は何バイト？ (1KB=1024Bとする)`,
+        q: `${kb}KB (キロバイト) は何バイトか。 (1KB＝1024Bとする)`,
         options: wrongOptions.map(String),
-        a: wrongOptions.indexOf(answer),
-        explanation: `情報の世界では $2^{10}=1024$ を単位の区切りとすることが多いです。\n${kb} × 1024 = ${answer} バイトです。`
+        a: wrongOptions.indexOf(answer)
       });
-    } else {
-       // Question: Color depth
-       const colors = [1, 4, 8]; // Simple depths
-       const c = colors[randomInt(0, 2)];
-       const answer = 2 ** c;
-       
-       const wrongOptions = generateUniqueOptions(answer, 4, () => {
-           const r = randomInt(0,2);
-           if(r===0) return c * c;
-           if(r===1) return c * 10;
-           return 2 ** (c-1);
-       });
-
-       qs.push({
-         q: `${c}ビットカラーで表現できる色数は？`,
-         options: wrongOptions.map(String),
-         a: wrongOptions.indexOf(answer),
-         explanation: `色数もビット数Nに対して $2^N$ で計算できます。\n例：8ビットカラーなら256色です。`
-       });
     }
   }
   return qs;
 }
 
 // Generator: Base Conversion - SIMPLIFIED
-function generateBaseConvQuestions(count = 16) {
+function generateBaseConvQuestions(count = 10) {
   const qs = [];
   for(let i=0; i<count; i++) {
     const type = randomInt(0, 2);
@@ -118,17 +101,15 @@ function generateBaseConvQuestions(count = 16) {
       const wrongOptions = generateUniqueOptions(val, 4, () => val + randomInt(-3, 3));
 
       qs.push({
-        q: `2進数「${bin}」を10進数に変換すると？`,
+        q: `2進数「${bin}」を10進数に変換した値は何か。`,
         options: wrongOptions.map(String),
-        a: wrongOptions.indexOf(val),
-        explanation: `各桁の重み(1, 2, 4, 8...)を足し合わせます。`
+        a: wrongOptions.indexOf(val)
       });
 
     } else if (type === 1) { // Dec -> Bin (Small numbers 3-15)
       const val = randomInt(3, 15);
       const bin = val.toString(2);
       
-      // Make sure wrong options are valid binaries of similar length
       const wrongOptions = generateUniqueOptions(bin, 4, () => {
           let v = val + randomInt(-3, 3);
           if (v <= 0) v = 1;
@@ -136,281 +117,142 @@ function generateBaseConvQuestions(count = 16) {
       });
 
       qs.push({
-        q: `10進数「${val}」を2進数に変換すると？`,
-        options: wrongOptions, // Already strings
-        a: wrongOptions.indexOf(bin),
-        explanation: `数値を2で割っていき、余りを下から並べると求められます。`
+        q: `10進数「${val}」を2進数に変換した値は何か。`,
+        options: wrongOptions,
+        a: wrongOptions.indexOf(bin)
       });
 
-    } else { // Hex -> Dec (Simple ones like A, F, 10, 1A)
-      const val = [10, 11, 12, 13, 14, 15, 16, 26, 31][randomInt(0, 8)];
+    } else { // Hex -> Dec (Simple ones like A, F, 10)
+      const val = [10, 11, 12, 13, 14, 15, 16][randomInt(0, 6)];
       const hex = val.toString(16).toUpperCase();
       
-      const wrongOptions = generateUniqueOptions(val, 4, () => val + randomInt(-5, 5));
+      const wrongOptions = generateUniqueOptions(val, 4, () => val + randomInt(-3, 3));
 
       qs.push({
-        q: `16進数「${hex}」を10進数で表すと？`,
+        q: `16進数「${hex}」を10進数に変換した値は何か。`,
         options: wrongOptions.map(String),
-        a: wrongOptions.indexOf(val),
-        explanation: `16進数の1桁は0-9, A-F(10-15)です。`
+        a: wrongOptions.indexOf(val)
       });
     }
   }
   return qs;
 }
 
-// Generator: Calculation - SIMPLIFIED (Simple Addition)
-function generateCalcQuestions(count = 16) {
+// Generate Vocab Questions dynamically based on selected genre (Always 4-options, term guessing)
+function generateVocabularyQuestions(genreId, count = 5) {
+  const items = ITEM_LIST.filter(item => item.genre_id === genreId);
+  if (items.length === 0) return [];
+
   const qs = [];
-  for(let i=0; i<count; i++) {
-    const a = randomInt(1, 5); // Very small numbers
-    const b = randomInt(1, 5);
-    const sum = a + b;
-    const aBin = a.toString(2);
-    const bBin = b.toString(2);
-    const sumBin = sum.toString(2);
+  for (let i = 0; i < count; i++) {
+    const targetItem = items[Math.floor(Math.random() * items.length)];
+    const descIdx = Math.floor(Math.random() * 3);
+    const targetDesc = targetItem.explanations[descIdx];
     
-    const wrongOptions = generateUniqueOptions(sumBin, 4, () => {
-        let v = sum + randomInt(-2, 2);
-        if (v <= 0) v = 1;
-        return v.toString(2);
-    });
+    // Target Term is correct answer
+    const correctText = targetItem.name;
+    
+    // Choose 3 unique dummy options prioritising same genre
+    const sameGenreWrong = items.filter(item => item.id !== targetItem.id);
+    let wrongOptions = [];
+    
+    // Shuffle same genre options and extract names
+    const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
+    wrongOptions.push(...shuffledSameGenre.map(item => item.name));
+    
+    // If not enough (which won't happen here, but acts as a robust fallback), top up from others
+    if (wrongOptions.length < 3) {
+      const otherGenreWrong = ITEM_LIST.filter(item => item.genre_id !== genreId);
+      const shuffledOther = otherGenreWrong.sort(() => 0.5 - Math.random());
+      for (let item of shuffledOther) {
+        if (wrongOptions.length >= 3) break;
+        if (!wrongOptions.includes(item.name)) {
+          wrongOptions.push(item.name);
+        }
+      }
+    } else {
+      wrongOptions = wrongOptions.slice(0, 3);
+    }
+    
+    const options = [correctText, ...wrongOptions];
+    const shuffledOptions = options.sort(() => 0.5 - Math.random());
+    const correctIdx = shuffledOptions.indexOf(correctText);
     
     qs.push({
-      q: `2進数の計算： ${aBin} + ${bBin} = ?`,
-      options: wrongOptions,
-      a: wrongOptions.indexOf(sumBin),
-      explanation: `10進数で ${a}+${b}=${sum} なので、${sum}を2進数に直します。`
+      q: targetDesc,
+      options: shuffledOptions,
+      a: correctIdx,
+      genre_id: genreId
     });
   }
+  
   return qs;
 }
 
-// Generator: Logic Gates
-function generateLogicQuestions(count = 16) {
-  const qs = [];
-  const gates = ['AND', 'OR', 'XOR', 'NAND'];
-  for(let i=0; i<count; i++) {
-    const gate = gates[randomInt(0, 3)];
-    const a = randomInt(0, 1);
-    const b = randomInt(0, 1);
-    let ans = 0;
-    if(gate === 'AND') ans = a & b;
-    if(gate === 'OR') ans = a | b;
-    if(gate === 'XOR') ans = a ^ b;
-    if(gate === 'NAND') ans = (a & b) ? 0 : 1;
-    
-    let desc = "";
-    if(gate === 'AND') desc = "両方1のときだけ1";
-    if(gate === 'OR') desc = "どちらかが1なら1";
-    if(gate === 'XOR') desc = "異なる場合に1 (同じなら0)";
-    if(gate === 'NAND') desc = "ANDの逆 (両方1のときだけ0)";
-
-    qs.push({
-      q: `論理回路：入力A=${a}, 入力B=${b} のとき、${gate}回路の出力は？`,
-      options: ["0", "1", "不定", "Z"],
-      a: ans === 0 ? 0 : 1,
-      explanation: `${gate}回路は「${desc}」となる回路です。`
-    });
-  }
-  return qs;
-}
-
-
-// --- Quiz Data Structure: 12 Genres based on "Info I" Curriculum ---
+// --- Quiz Data Structure: 10 Genres ---
 const genres = [
   {
-    id: 'info_unit',
-    title: '情報の単位と量',
-    icon: '📏',
-    description: 'ビット、バイト、情報量の計算',
-    questions: [
-      { q: "「1ビット」で表現できる情報の種類は何通り？", options: ["1通り", "2通り", "4通り", "8通り"], a: 1, explanation: "1ビットは0と1の2通りの状態を持ちます。" },
-      { q: "「1バイト」は何ビット？", options: ["4ビット", "8ビット", "16ビット", "32ビット"], a: 1, explanation: "通常、8ビットをまとめて1バイトと呼びます。" },
-      { q: "1バイトで表現できる情報量は2の8乗で何通り？", options: ["128", "255", "256", "512"], a: 2, explanation: "2の8乗 = 256通りです。0〜255の整数を表現できます。" },
-      { q: "nビットで表現できる情報の種類は？", options: ["2 × n", "nの2乗", "2のn乗", "n + 2"], a: 2, explanation: "ビットが増えるごとに表現できる数は2倍になります。" }
-    ]
-  },
-  {
-    id: 'base_conv',
-    title: '基数変換',
+    id: 'info_unit_base',
+    title: '情報の単位と量・基数変換',
     icon: '🔢',
-    description: '2進数、10進数、16進数の変換',
-    questions: [
-      { q: "2進数の「1010」を10進数にすると？", options: ["8", "10", "12", "14"], a: 1, explanation: "8+2=10 となります。" },
-      { q: "10進数の「5」を2進数にすると？", options: ["100", "101", "110", "111"], a: 1, explanation: "5 = 4 + 1 なので、101となります。" },
-      { q: "16進数で「10」から「15」を表すのに使う文字は？", options: ["G〜L", "A〜F", "X〜Z", "α〜ω"], a: 1, explanation: "A=10, B=11, ... F=15 と対応します。" },
-      { q: "2進数「1111」は16進数でいくつ？", options: ["A", "C", "E", "F"], a: 3, explanation: "8+4+2+1=15。15は16進数でFです。" }
-    ]
+    description: 'ビット、バイト、情報量の計算、2進数・10進数・16進数の基数変換',
+    questions: []
   },
   {
-    id: 'calc_comp',
-    title: '数値の計算と補数',
-    icon: '➕',
-    description: '2進数の加減算、負の数の表現',
-    questions: [
-      { q: "コンピュータで「負の数」を表現する際によく使われる考え方は？", options: ["逆数", "補数", "虚数", "対数"], a: 1, explanation: "補数を使うと、引き算を足し算として処理できるため効率的です。" },
-      { q: "2進数の「0101 + 1001」の計算結果は？", options: ["1100", "1110", "1000", "1111"], a: 1, explanation: "5 + 9 = 14。14は2進数で1110です。" },
-      { q: "2の補数を求める手順：ビットを反転させた後、どうする？", options: ["1を引く", "1を足す", "そのまま", "2倍する"], a: 1, explanation: "反転して1を足すことで2の補数（負の数）が得られます。" },
-      { q: "桁あふれ（オーバーフロー）とは何？", options: ["計算結果が桁数を超える", "計算が速すぎること", "ゼロで割ること", "電源が落ちること"], a: 0, explanation: "用意されたビット数に収まりきらない状態のことです。" }
-    ]
+    id: '01_info_media',
+    title: '01 情報とメディアの特性',
+    icon: '💡',
+    description: '一次情報・二次情報、メディアリテラシー、残存性、複製性などの特性',
+    questions: []
   },
   {
-    id: 'text_enc',
-    title: '文字のデジタル表現',
-    icon: '🔤',
-    description: '文字コード、フォント',
-    questions: [
-      { q: "英数字や記号を扱う最も基本的な文字コードは？", options: ["Shift_JIS", "ASCII", "EUC-JP", "Unicode"], a: 1, explanation: "ASCII（アスキー）は7ビットで英数字を表す基本コードです。" },
-      { q: "世界中の文字を統一して扱うための文字コードは？", options: ["ASCII", "Unicode (UTF-8等)", "JISコード", "EBCDIC"], a: 1, explanation: "Unicodeは多言語対応のための標準規格です。" },
-      { q: "文字の形状（デザイン）データのことを何と呼ぶ？", options: ["グリフ", "グラフ", "ビット", "ピクセル"], a: 0, explanation: "同じ文字コードでも、フォントによってグリフ（形）が異なります。" },
-      { q: "拡大してもギザギザにならないフォント形式は？", options: ["ビットマップフォント", "アウトラインフォント", "ドットフォント", "ラスターフォント"], a: 1, explanation: "輪郭を数式で記録するため、拡大しても滑らかです。" },
-      { q: "日本語の文字コードとしてWindowsで標準的に使われてきたのは？", options: ["Shift_JIS", "EUC-JP", "ISO-2022-JP", "UTF-8"], a: 0, explanation: "Shift_JIS（CP932）が長らく使われてきました。" },
-      { q: "Unicodeの符号化方式の一つで、Webで最も普及しているのは？", options: ["UTF-8", "UTF-16", "UTF-32", "Shift_JIS"], a: 0, explanation: "UTF-8はASCIIとの互換性が高く、Webの標準となっています。" },
-      { q: "文字化けの原因として最も可能性が高いのは？", options: ["文字コードの不一致", "フォントサイズの違い", "画面の明るさ", "OSの種類"], a: 0, explanation: "作成時と表示時で異なる文字コードを指定すると発生します。" },
-      { q: "「A」のASCIIコードは0x41。「B」のASCIIコードは？", options: ["0x40", "0x42", "0x43", "0x50"], a: 1, explanation: "連番になっているため、41の次は42です。" },
-      { q: "アウトラインフォントは画像をどう記録している？", options: ["点の集まり", "輪郭線の座標計算式", "色の濃淡", "圧縮データ"], a: 1, explanation: "ベジェ曲線などの数式データとして記録されています。" },
-      { q: "「改行」などの制御文字も文字コードに含まれる？", options: ["含まれる", "含まれない", "OSによる", "アプリによる"], a: 0, explanation: "コンピュータへの命令を表す文字としてコードが割り当てられています。" }
-    ]
+    id: '02_prob_solving',
+    title: '02 問題解決',
+    icon: '📊',
+    description: '問題解決、MECE（ミーシー）、PDCAサイクル、KJ法、トレードオフ、ブレインストーミング',
+    questions: []
   },
   {
-    id: 'sound_digi',
-    title: '音のデジタル表現',
-    icon: '🎵',
-    description: '標本化、量子化、符号化',
-    questions: [
-      { q: "アナログ波形をデジタル化する3ステップの正しい順序は？", options: ["標本化→量子化→符号化", "量子化→標本化→符号化", "符号化→標本化→量子化", "標本化→符号化→量子化"], a: 0, explanation: "時間を区切る(標本化)→値を決める(量子化)→数値にする(符号化)の順です。" },
-      { q: "1秒間に波の高さを測定する回数（サンプリング周波数）の単位は？", options: ["dpi", "bps", "Hz", "fps"], a: 2, explanation: "Hz（ヘルツ）は1秒あたりの回数を表します。" },
-      { q: "電圧（波の高さ）を段階的な数値に変換することを何という？", options: ["標本化", "量子化", "符号化", "暗号化"], a: 1, explanation: "連続的な値を離散的な（飛び飛びの）値にすることを量子化と言います。" },
-      { q: "CDの音質など、音を圧縮せずに記録する方式は？", options: ["PCM方式", "MP3方式", "AAC方式", "MIDI方式"], a: 0, explanation: "Pulse Code Modulationの略で、非圧縮のデジタル音声形式です。" },
-      { q: "ハイレゾ音源の特徴は？", options: ["CDよりサンプリング周波数が低い", "CDより情報量が多い", "モノラルである", "アナログレコードと同じ"], a: 1, explanation: "CDを超える情報量（高解像度）を持つ音源のことです。" },
-      { q: "量子化ビット数を増やすとどうなる？", options: ["音の大小の段階が細かくなる", "音が高くなる", "再生速度が速くなる", "ノイズが増える"], a: 0, explanation: "16bitより24bitの方が、より繊細な音の強弱を表現できます。" },
-      { q: "人の可聴域（聞こえる周波数）はおよそ？", options: ["20Hz〜20kHz", "1Hz〜100Hz", "100kHz以上", "0Hz〜10kHz"], a: 0, explanation: "個人差はありますが、一般的にこの範囲とされています。" },
-      { q: "MP3などの非可逆圧縮でカットされるデータは？", options: ["人間が聞き取りにくい部分", "一番大きい音", "一番低い音", "ランダムな部分"], a: 0, explanation: "聴覚心理学に基づき、聞こえにくい成分を削除して容量を減らします。" },
-      { q: "「MIDI」データが記録しているのは？", options: ["波形の音そのもの", "演奏情報（音程や長さ）", "歌詞", "ジャケット画像"], a: 1, explanation: "電子楽器の演奏データ（楽譜のようなもの）で、容量が非常に小さいです。" },
-      { q: "音の3要素は「大きさ」「高さ」とあと一つは？", options: ["音色", "速さ", "距離", "温度"], a: 0, explanation: "同じ高さと大きさでも、ピアノとバイオリンで音が違うのは音色が違うからです。" }
-    ]
+    id: '03_04_moral_personal',
+    title: '03・04 情報モラルと個人情報',
+    icon: '👤',
+    description: '情報モラルの基本、デジタルデバイド、フィルターバブル、エコーチェンバー、ネット依存、個人情報定義、個人識別符号、肖像権、ジオタグ等、プライバシーポリシー',
+    questions: []
   },
   {
-    id: 'image_digi',
-    title: '画像のデジタル表現',
-    icon: '🖼️',
-    description: '画素、三原色、ラスタ/ベクタ',
-    questions: [
-      { q: "ディスプレイなどで使われる「光の三原色」は？", options: ["CMY", "RGB", "HSV", "YUV"], a: 1, explanation: "Red(赤), Green(緑), Blue(青)の3色で、混ぜると白になります（加法混色）。" },
-      { q: "光の三原色をすべて混ぜると何色になる？", options: ["黒", "白", "紫", "茶"], a: 1, explanation: "光は重なるほど明るくなり、白になります。" },
-      { q: "画像を点の集まり（画素）で表現する形式は？", options: ["ベクタ形式", "ラスタ形式", "数式形式", "パス形式"], a: 1, explanation: "写真などはラスタ形式（ビットマップ）が適しています。" },
-      { q: "画像の細かさを表す「解像度」の単位でよく使われるのは？", options: ["dpi", "Hz", "bps", "rpm"], a: 0, explanation: "dots per inchの略で、1インチあたりのドット数を表します。" },
-      { q: "印刷インクで使われる「色の三原色」は？", options: ["CMY", "RGB", "RYB", "BkWH"], a: 0, explanation: "Cyan, Magenta, Yellowの3色で、混ぜると黒に近づきます（減法混色）。" },
-      { q: "1画素を24ビット（RGB各8ビット）で表現する場合、表現できる色数は？", options: ["約256色", "約65000色", "約1677万色", "無限"], a: 2, explanation: "2の24乗 ≒ 1677万色（フルカラー）です。" },
-      { q: "画像を拡大するとぼやけたりギザギザになるのは？", options: ["ラスタ画像", "ベクタ画像", "アウトラインフォント", "SVG"], a: 0, explanation: "点の集まりであるため、拡大すると点が目立ってしまいます。" },
-      { q: "透明度を表すチャンネル（アルファチャンネル）を持つ画像形式は？", options: ["JPEG", "PNG", "BMP", "GIF(透過色のみ)"], a: 1, explanation: "PNGは半透明（アルファチャンネル）を扱えます。" },
-      { q: "CMY（シアン・マゼンタ・イエロー）を混ぜると何色に近づく？", options: ["白", "黒", "赤", "青"], a: 1, explanation: "インクを混ぜるほど暗くなり、黒に近づきます。" },
-      { q: "1インチあたりのドット数を表すdpiは何の略？", options: ["dots per inch", "data per image", "digital pixel index", "display per inch"], a: 0, explanation: "1インチ(約2.54cm)の中にどれだけドットがあるかを示します。" }
-    ]
+    id: '05_intellectual_property',
+    title: '05 知的財産権',
+    icon: '🎨',
+    description: '産業財産権（特許・意匠等）と著作権、方式・無方式主義、パブリックドメイン、ライセンス契約',
+    questions: []
   },
   {
-    id: 'video_digi',
-    title: '動画のデジタル表現',
-    icon: '🎬',
-    description: 'フレームレート、データ量',
-    questions: [
-      { q: "動画が動いて見える原理は目の何を利用している？", options: ["錯覚現象", "残像現象", "焦点調節", "明暗順応"], a: 1, explanation: "前の映像の残像が残っている間に次の映像が表示されることで動いて見えます。" },
-      { q: "1秒間に表示される画像の枚数を表す単位は？", options: ["dpi", "Hz", "fps", "bps"], a: 2, explanation: "frames per secondの略です。" },
-      { q: "30fpsの動画で、1分間に表示される静止画は何枚？", options: ["300枚", "600枚", "1800枚", "3600枚"], a: 2, explanation: "30枚 × 60秒 = 1800枚です。" },
-      { q: "一般的に、動画のデータ量は静止画に比べてどうなる？", options: ["非常に小さい", "変わらない", "非常に大きい", "半減する"], a: 2, explanation: "大量の静止画と音声を含むため、データ量は非常に大きくなります。" },
-      { q: "動画データの入れ物（コンテナ）を表す拡張子は？", options: [".mp4", ".jpg", ".txt", ".html"], a: 0, explanation: "mp4は映像と音声を格納する代表的なコンテナフォーマットです。" },
-      { q: "動画圧縮の基準となるフレーム（完全な画像）を何という？", options: ["キーフレーム", "サブフレーム", "デルタフレーム", "ヌルフレーム"], a: 0, explanation: "Iフレームとも呼ばれ、単体で画像として成立するフレームです。" },
-      { q: "インターネットでの動画配信に適した技術は？", options: ["ストリーミング", "ダウンロードのみ", "フロッピーディスク", "FAX"], a: 0, explanation: "データをダウンロードしながら再生する技術です。" },
-      { q: "4K解像度はおよそどのくらい？", options: ["1920x1080", "3840x2160", "720x480", "800x600"], a: 1, explanation: "フルHD(1920x1080)の縦横2倍、面積で4倍の解像度です。" },
-      { q: "フレーム間の差分だけを記録する圧縮方式を何という？", options: ["フレーム間圧縮", "空間圧縮", "可逆圧縮", "ZIP圧縮"], a: 0, explanation: "前後の画像と似ている部分を省略することで圧縮します。" },
-      { q: "アスペクト比「16:9」はどのような形状？", options: ["正方形", "横長（ワイド）", "縦長", "円形"], a: 1, explanation: "現在の一般的なテレビやYouTube動画の比率です。" }
-    ]
+    id: '06_info_security',
+    title: '06 情報セキュリティ',
+    icon: '🔒',
+    description: '機密性・完全性・可用性、マルウェア、ソーシャルエンジニアリング、ファイアウォール',
+    questions: []
   },
   {
-    id: 'compression',
-    title: 'データの圧縮',
-    icon: '📦',
-    description: '可逆圧縮、非可逆圧縮',
-    questions: [
-      { q: "圧縮したデータを元に戻したとき、完全に元の状態に戻る方式は？", options: ["可逆圧縮", "非可逆圧縮", "不可逆圧縮", "高圧縮"], a: 0, explanation: "文書ファイルやプログラムなどは、1ビットでも変わると困るため可逆圧縮を使います。" },
-      { q: "JPEG形式の画像やMP3形式の音声は、一般的にどの圧縮方式？", options: ["可逆圧縮", "非可逆圧縮", "ZIP圧縮", "LZH圧縮"], a: 1, explanation: "人の感覚に影響が少ない範囲でデータを捨てて、圧縮率を高めています。" },
-      { q: "「白白白黒黒」を「白3黒2」のように記録する圧縮方法は？", options: ["ハフマン符号化", "ランレングス圧縮", "辞書圧縮", "差分圧縮"], a: 1, explanation: "連続するデータの長さを記録する方式です。" },
-      { q: "非可逆圧縮のメリットは？", options: ["画質が良くなる", "圧縮率を高くできる", "元に戻せる", "計算が不要"], a: 1, explanation: "画質等は多少劣化しますが、ファイルサイズを劇的に小さくできます。" },
-      { q: "出現頻度の高いデータに短いビット列を割り当てる手法は？", options: ["ハフマン符号化", "ランレングス法", "MP3", "JPEG"], a: 0, explanation: "よく出る文字を短く表現することで全体のデータ量を減らします。" },
-      { q: "ZIPファイルはどの圧縮方式？", options: ["可逆圧縮", "非可逆圧縮", "音声圧縮", "動画圧縮"], a: 0, explanation: "ZIPは解凍すると完全に元に戻る可逆圧縮です。" },
-      { q: "圧縮したデータを元に戻すことを何という？", options: ["解凍（伸張/展開）", "冷凍", "再圧縮", "インストール"], a: 0, explanation: "伸張（しんちょう）や展開とも呼ばれます。" },
-      { q: "次のうち、可逆圧縮の画像形式は？", options: ["JPEG", "PNG", "MPEG", "HEIC(設定による)"], a: 1, explanation: "PNGは画質を劣化させずに圧縮できます。" },
-      { q: "辞書圧縮法で利用するのは？", options: ["データの繰り返しパターン", "色の平均値", "音の高さ", "ファイル名"], a: 0, explanation: "繰り返し出現するパターンを短いコードに置き換えます。" },
-      { q: "データ量が半分になった場合、圧縮率は？", options: ["200%", "50%", "100%", "0%"], a: 1, explanation: "圧縮後のサイズ ÷ 元のサイズ × 100 で計算します。" }
-    ]
+    id: '07_info_tech_dev',
+    title: '07 情報技術の発展',
+    icon: '📶',
+    description: '生活を支えるPOS、IoT、AI(人工知能)の学習と Society5.0、クラウドサービス',
+    questions: []
   },
   {
-    id: 'hardware',
-    title: 'コンピュータの構成',
-    icon: '🖥️',
-    description: '5大装置、CPU、メモリ',
-    questions: [
-      { q: "コンピュータの「頭脳」にあたり、演算と制御を行う装置は？", options: ["HDD", "メモリ", "CPU", "マウス"], a: 2, explanation: "Central Processing Unit（中央演算処理装置）のことです。" },
-      { q: "電源を切るとデータが消えてしまう主記憶装置（メモリ）は？", options: ["RAM", "ROM", "SSD", "DVD"], a: 0, explanation: "Random Access Memoryは揮発性のメモリです。" },
-      { q: "5大装置に含まれないものは？", options: ["入力装置", "出力装置", "通信装置", "記憶装置"], a: 2, explanation: "5大装置は「制御・演算・記憶・入力・出力」です。通信装置は含まれません（現代では必須ですが）。" },
-      { q: "CPUの処理速度に関係する、動作のタイミングを合わせる信号は？", options: ["クロック信号", "デジタル信号", "アナログ信号", "Wi-Fi信号"], a: 0, explanation: "クロック周波数（Hz）が高いほど、1秒間に多くの処理ができます。" },
-      { q: "CPUと主記憶装置の速度差を埋めるための高速なメモリは？", options: ["キャッシュメモリ", "USBメモリ", "仮想メモリ", "フラッシュメモリ"], a: 0, explanation: "CPU内部などにあり、頻繁に使うデータを一時保存します。" },
-      { q: "GPUが特に得意とする処理は？", options: ["OSの起動", "画像・映像の処理", "文書作成", "印刷"], a: 1, explanation: "並列処理が得意で、3DグラフィックスやAI計算に使われます。" },
-      { q: "SSDの特徴として正しいものは？", options: ["HDDより遅い", "衝撃に強い・高速", "磁気ディスクを使う", "容量が無限"], a: 1, explanation: "半導体メモリを使うため、物理的な駆動部がなく高速です。" },
-      { q: "BIOS/UEFIが保存されているメモリは？", options: ["RAM", "ROM (フラッシュROM)", "HDD", "Cache"], a: 1, explanation: "起動用プログラムは書き換える必要が少ないため、ROMに保存されます。" },
-      { q: "周辺機器を接続する規格「USB」は何の略？", options: ["Universal Serial Bus", "Ultra Speed Board", "United System Base", "User Service Box"], a: 0, explanation: "汎用的な直列バスという意味です。" },
-      { q: "主記憶装置の容量が足りない時にHDDなどを借りて使う仕組みは？", options: ["仮想メモリ", "キャッシュメモリ", "クラウド", "バックアップ"], a: 0, explanation: "補助記憶装置の一部をメモリのように扱います。" }
-    ]
+    id: '08_media_comm',
+    title: '08 メディアとコミュニケーション',
+    icon: '📞',
+    description: '同期・非同期型、マスメディアとソーシャルメディア（SNS）、炎上現象',
+    questions: []
   },
   {
-    id: 'software',
-    title: 'ソフトウェアとOS',
-    icon: '💿',
-    description: 'OSの役割、GUI、ファイル',
-    questions: [
-      { q: "ハードウェアとアプリの間で管理を行う「基本ソフトウェア」は？", options: ["OS", "Webブラウザ", "表計算ソフト", "ドライバ"], a: 0, explanation: "Operating Systemの略です。Windows, macOS, iOS, Androidなどがあります。" },
-      { q: "マウスやアイコンを使って直感的に操作できる画面環境を何という？", options: ["CUI", "GUI", "API", "SNS"], a: 1, explanation: "Graphical User Interfaceの略です。" },
-      { q: "ファイルを階層的に整理するための入れ物を何という？", options: ["ファイル", "ドライブ", "フォルダ（ディレクトリ）", "クラウド"], a: 2, explanation: "PCではフォルダ、プログラミング等ではディレクトリと呼びます。" },
-      { q: "ファイル名の末尾につき、ファイルの種類を表す文字列（例 .jpg）は？", options: ["ドメイン", "プロトコル", "拡張子", "パス"], a: 2, explanation: "OSがどのアプリで開くかを判断するのに使われます。" },
-      { q: "オープンソースのOSの代表例は？", options: ["Linux", "Windows", "macOS", "Excel"], a: 0, explanation: "誰でもソースコードを閲覧・改良できるOSです。" },
-      { q: "新しいハードウェアを接続した時に必要な制御ソフトは？", options: ["デバイスドライバ", "デバイスマネージャ", "デバイスアプリ", "デバイスOS"], a: 0, explanation: "OSとハードウェアの仲介役をするソフトです。" },
-      { q: "複数のタスクを同時に実行しているように見せる機能は？", options: ["マルチタスク", "シングルタスク", "マルチコア", "ハイパースレッド"], a: 0, explanation: "CPUの処理時間を細かく切り替えて、並行して動いているように見せます。" },
-      { q: "アプリ同士でデータをやり取りするためのコピー領域は？", options: ["クリップボード", "デスクトップ", "ごみ箱", "タスクバー"], a: 0, explanation: "コピー＆ペーストの際に一時的にデータが保存される場所です。" },
-      { q: "OSが提供する機能を利用するためのプログラム部品群は？", options: ["API", "GUI", "CUI", "URL"], a: 0, explanation: "Application Programming Interfaceの略です。" },
-      { q: "バックアップの目的は？", options: ["容量を増やす", "データの消失に備える", "動作を速くする", "電気代を節約する"], a: 1, explanation: "故障や操作ミスに備えて、別の場所に複製を保存することです。" }
-    ]
-  },
-  {
-    id: 'logic_circuit',
-    title: '論理回路',
-    icon: '🔌',
-    description: 'AND, OR, NOT, 真理値表',
-    questions: [
-      { q: "2つの入力が「ともに1」のときだけ1を出力する回路は？", options: ["OR回路", "NOT回路", "AND回路", "NAND回路"], a: 2, explanation: "論理積回路とも呼ばれます。" },
-      { q: "入力の「どちらか一方でも1」なら1を出力する回路は？", options: ["OR回路", "NOT回路", "AND回路", "NOR回路"], a: 0, explanation: "論理和回路とも呼ばれます。" },
-      { q: "入力信号を反転させる（0なら1、1なら0にする）回路は？", options: ["OR回路", "NOT回路", "AND回路", "XOR回路"], a: 1, explanation: "否定回路とも呼ばれます。" },
-      { q: "1桁の2進数の足し算を行う回路を何という？", options: ["半加算器", "全加算器", "倍率器", "整流器"], a: 0, explanation: "繰り上がりを考慮しない1桁の加算回路です（考慮するのは全加算器）。" }
-      // Dynamic logic questions added on init
-    ]
-  },
-  {
-    id: 'algorithm',
-    title: 'アルゴリズム',
-    icon: '🧩',
-    description: '処理手順、フローチャート',
-    questions: [
-      { q: "問題を解決するための手順や計算方法を定式化したものは？", options: ["アルゴリズム", "プログラム", "パラダイム", "メカニズム"], a: 0, explanation: "コンピュータに処理させるための手順のことです。" },
-      { q: "アルゴリズムの基本構造3つに含まれないものは？", options: ["順次（順接）", "選択（分岐）", "反復（繰り返し）", "乱数（ランダム）"], a: 3, explanation: "基本構造は「順次」「選択」「反復」の3つです。" },
-      { q: "処理の流れを図形で表したものを何という？", options: ["グラフ", "フローチャート", "マインドマップ", "ヒストグラム"], a: 1, explanation: "流れ図とも呼ばれます。" },
-      { q: "フローチャートで「判断（分岐）」を表す記号の形は？", options: ["長方形", "楕円", "ひし形", "平行四辺形"], a: 2, explanation: "Yes/Noで線が分岐します。" },
-      { q: "データの探索で、先頭から順に探す方法は？", options: ["線形探索", "二分探索", "ハッシュ探索", "深さ優先探索"], a: 0, explanation: "リニアサーチとも呼ばれ、データが整列していなくても使えます。" },
-      { q: "データが整列されている時に使える高速な探索法は？", options: ["二分探索", "線形探索", "全探索", "ランダム探索"], a: 0, explanation: "バイナリサーチ。真ん中と比較して範囲を半分に絞っていきます。" },
-      { q: "フローチャートで「処理」を表す記号の形は？", options: ["長方形", "円", "ひし形", "平行四辺形"], a: 0, explanation: "計算や代入などの処理を表します。" },
-      { q: "「交換」「選択」「挿入」などが代表的なアルゴリズムの種類は？", options: ["整列（ソート）", "探索（サーチ）", "圧縮", "暗号化"], a: 0, explanation: "データをある規則（小さい順など）に従って並べ替えるアルゴリズムです。" },
-      { q: "バグを取り除く作業を何という？", options: ["デバッグ", "コンパイル", "コーディング", "リンク"], a: 0, explanation: "プログラムの誤り（バグ）を修正する作業です。" },
-      { q: "プログラムのソースコードを機械語に変換するソフトは？", options: ["コンパイラ", "エディタ", "デバッガ", "OS"], a: 0, explanation: "人間が読めるプログラムを、コンピュータが実行できる形式に翻訳します。" }
-    ]
+    id: '09_info_design',
+    title: '09 情報デザイン',
+    icon: '🖌️',
+    description: '情報デザインアプローチ、認知を助けるピクトグラム、ユニバーサルデザイン、GUI、インフォグラフィック',
+    questions: []
   }
 ];
 
@@ -419,10 +261,9 @@ const comprehensiveGenre = {
   id: 'comprehensive',
   title: '総合演習 (全範囲)',
   icon: '🎓',
-  description: '全ジャンルから出題。問題数20問。獲得ステータスは半分(切り上げ)。',
-  questions: [] // Populated dynamically
+  description: '全ジャンルからランダムに出題。問題数10問。限界に挑戦！',
+  questions: []
 };
-
 
 // --- State ---
 let currentGenre = null;
@@ -433,8 +274,13 @@ let bonuses = { power: 10, loft: 20, wind: 0 };
 let isQuestionsExpanded = false;
 let wrongAnswers = [];
 let questionStartTime = 0;
-let quizStartTime = 0; // Track total quiz time
+let quizStartTime = 0;
 let currentShuffledIndices = [];
+
+// Detailed view card toggler state
+let currentCardDetailItem = null;
+let currentCardDetailIndex = 0;
+let selectedCollectionGenre = 'all';
 
 // --- DOM Elements ---
 let els = {};
@@ -446,7 +292,18 @@ function init() {
     gameContainer: document.getElementById('game-container'),
     collectionModal: document.getElementById('collection-modal'),
     genreGrid: document.getElementById('genre-grid'),
-    btnReset: document.getElementById('btn-reset'),
+    btnSubmit: document.getElementById('btn-submit'),
+    submitModal: document.getElementById('submit-modal'),
+    btnCloseSubmit: document.getElementById('btn-close-submit'),
+    btnCancelSubmit: document.getElementById('btn-cancel-submit'),
+    btnGenerateReport: document.getElementById('btn-generate-report'),
+    btnDownloadReport: document.getElementById('btn-download-report'),
+    submitUserGrade: document.getElementById('submit-user-grade'),
+    submitUserClass: document.getElementById('submit-user-class'),
+    submitUserNumber: document.getElementById('submit-user-number'),
+    submitUserName: document.getElementById('submit-user-name'),
+    reportCanvas: document.getElementById('report-canvas'),
+    reportPreviewImg: document.getElementById('report-preview-img'),
     btnCollection: document.getElementById('btn-collection'),
     btnCloseCollection: document.getElementById('btn-close-collection'),
     valGlobalBest: document.getElementById('val-global-best'),
@@ -465,9 +322,26 @@ function init() {
     console.error("Initialization failed: Missing DOM elements.");
     return;
   }
+
+  // Set dynamic page title and headers based on central EXAM_CONFIG coordinates
+  document.title = `${EXAM_CONFIG.subjectName}　${EXAM_CONFIG.termName}対策`;
+  const headerSubject = document.getElementById('header-subject-name');
+  const headerTerm = document.getElementById('header-term-name');
+  if (headerSubject) headerSubject.innerText = EXAM_CONFIG.subjectName;
+  if (headerTerm) headerTerm.innerText = `${EXAM_CONFIG.termName}対策`;
   
   // Setup Controls
-  if(els.btnReset) els.btnReset.onclick = resetProgress;
+  if(els.btnSubmit) els.btnSubmit.onclick = openSubmitModal;
+  if(els.btnCloseSubmit) els.btnCloseSubmit.onclick = closeSubmitModal;
+  if(els.btnCancelSubmit) els.btnCancelSubmit.onclick = closeSubmitModal;
+  if(els.btnGenerateReport) els.btnGenerateReport.onclick = () => generateReportCanvas();
+  if(els.btnDownloadReport) els.btnDownloadReport.onclick = downloadReportImage;
+  
+  if(els.submitUserName) els.submitUserName.oninput = () => generateReportCanvas();
+  if(els.submitUserGrade) els.submitUserGrade.oninput = () => generateReportCanvas();
+  if(els.submitUserClass) els.submitUserClass.oninput = () => generateReportCanvas();
+  if(els.submitUserNumber) els.submitUserNumber.oninput = () => generateReportCanvas();
+
   if(els.btnCollection) els.btnCollection.onclick = openCollection;
   if(els.btnCloseCollection) els.btnCloseCollection.onclick = closeCollection;
   if(els.btnCloseDetail) els.btnCloseDetail.onclick = closeCardDetail;
@@ -480,7 +354,6 @@ function init() {
   // Make Gacha Card clickable for details
   if(els.gachaCard) {
       els.gachaCard.onclick = () => {
-          // Check if card is flipped (has result)
           if(els.gachaCard.classList.contains('card-flip')) {
               const item = getLastGachaItem();
               if(item) showCardDetail(item);
@@ -498,7 +371,7 @@ function init() {
   // Setup restart callback from app.js
   setRestartCallback(returnToMenu);
 
-  // Expand questions just once
+  // Setup static/dynamic questions in memory (only once)
   if (!isQuestionsExpanded) {
     expandQuestions();
     isQuestionsExpanded = true;
@@ -509,18 +382,11 @@ function init() {
 }
 
 function expandQuestions() {
-  // Add dynamic questions to Math/Logic genres
-  const unitQ = genres.find(g => g.id === 'info_unit');
-  if(unitQ) unitQ.questions.push(...generateUnitQuestions(16));
-  
-  const baseQ = genres.find(g => g.id === 'base_conv');
-  if(baseQ) baseQ.questions.push(...generateBaseConvQuestions(16));
-  
-  const calcQ = genres.find(g => g.id === 'calc_comp');
-  if(calcQ) calcQ.questions.push(...generateCalcQuestions(16));
-  
-  const logicQ = genres.find(g => g.id === 'logic_circuit');
-  if(logicQ) logicQ.questions.push(...generateLogicQuestions(16));
+  const unitBaseQ = genres.find(g => g.id === 'info_unit_base');
+  if(unitBaseQ) {
+     unitBaseQ.questions.push(...generateUnitQuestions(12));
+     unitBaseQ.questions.push(...generateBaseConvQuestions(12));
+  }
 }
 
 // --- Menu Logic ---
@@ -532,12 +398,10 @@ function getStats(genreId) {
 
 function updateGlobalStats() {
   let maxShot = 0;
-  // Check standard genres
   genres.forEach(g => {
     const s = getStats(g.id);
     if (s.maxDistance > maxShot) maxShot = s.maxDistance;
   });
-  // Check comprehensive
   const cs = getStats('comprehensive');
   if(cs.maxDistance > maxShot) maxShot = cs.maxDistance;
 
@@ -569,19 +433,26 @@ function updateGlobalStats() {
 }
 
 function resetProgress() {
-  if(!confirm("すべての成績と記録をリセットしますか？")) return;
-  if(!confirm("本当にいいですか？")) return;
-  if(!confirm("後悔しませんね？")) return;
-  if(!confirm("ほんとにぃ？（もどせないったら！）")) return;
+  if(!confirm("すべての成績と記録（獲得コレクションカードを含む）をリセットしますか？")) return;
+  if(!confirm("本当にリセットしてもよろしいですか？（この操作は取り消せません）")) return;
 
   genres.forEach(g => {
     localStorage.removeItem(`golf_stats_${g.id}`);
   });
   localStorage.removeItem(`golf_stats_comprehensive`);
-  localStorage.removeItem('golf_gacha_collection'); // Reset Collection
-  localStorage.removeItem('golf_gacha_history'); // Reset History
-  resetSessionBest();
-  renderMenu();
+  localStorage.removeItem('golf_gacha_collection'); 
+  localStorage.removeItem('golf_gacha_history'); 
+  
+  // Clear any additional state key matches in localStorage
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('golf_stats_') || key.startsWith('golf_gacha_'))) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  // Reload the entire window to clear memory states and start fresh
+  window.location.reload();
 }
 
 function renderMenu() {
@@ -594,7 +465,6 @@ function renderMenu() {
   
   updateGlobalStats();
   
-  // Check Completion
   const isComplete = checkComplete();
   const badge = document.getElementById('complete-badge');
   if (isComplete) {
@@ -608,17 +478,13 @@ function renderMenu() {
   }
 
   els.genreGrid.innerHTML = '';
-
-  // Render Standard Genres
   genres.forEach(genre => renderGenreCard(genre));
-
-  // Render Comprehensive Card
   renderGenreCard(comprehensiveGenre, true);
 }
 
 function renderGenreCard(genre, isComprehensive = false) {
   const stats = getStats(genre.id);
-  const totalQ = isComprehensive ? 20 : 10; // Session limit
+  const totalQ = isComprehensive ? 10 : 5;
   
   const card = document.createElement('div');
   const borderClass = isComprehensive ? 'border-amber-400' : 'border-slate-200';
@@ -649,25 +515,65 @@ function renderGenreCard(genre, isComprehensive = false) {
 }
 
 function returnToMenu() {
+  if (nextButtonTimer) {
+     clearInterval(nextButtonTimer);
+     nextButtonTimer = null;
+  }
   document.getElementById('msg-finished').classList.add('hidden');
   renderMenu();
 }
 
 // --- Collection Modal Logic ---
-
 function openCollection() {
+  selectedCollectionGenre = 'all';
+  renderCollectionFilters();
+  renderCollectionItems();
+  els.collectionModal.classList.remove('hidden');
+}
+
+function renderCollectionFilters() {
+  const filtersDiv = document.getElementById('collection-filters');
+  if(!filtersDiv) return;
+
+  // Build the list of categories including overall option
+  const list = [
+    { id: 'all', title: '全体カード一覧', icon: '📖' },
+    ...genres.map(g => ({ id: g.id, title: g.title, icon: g.icon }))
+  ];
+
+  filtersDiv.innerHTML = list.map(f => {
+    const isActive = selectedCollectionGenre === f.id;
+    const activeClass = isActive 
+      ? 'bg-emerald-500 text-white border-emerald-500 shadow-md font-bold' 
+      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-transparent hover:text-slate-900';
+    return `
+      <button onclick="window.setCollectionFilter('${f.id}')" class="px-4 py-2 shrink-0 rounded-full border text-xs transition-all flex items-center gap-1.5 cursor-pointer select-none ${activeClass}">
+        <span>${f.icon}</span>
+        <span>${f.title}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function renderCollectionItems() {
   const collection = getCollection();
   const grid = document.getElementById('collection-grid');
+  if(!grid) return;
   grid.innerHTML = '';
 
-  let ownedCount = 0;
+  let filtered = ITEM_LIST;
+  if (selectedCollectionGenre !== 'all') {
+    filtered = ITEM_LIST.filter(item => item.genre_id === selectedCollectionGenre);
+  }
 
-  ITEM_LIST.forEach(item => {
+  let ownedCount = 0;
+  let totalCount = filtered.length;
+
+  filtered.forEach(item => {
     const isOwned = !!collection[item.id];
     if(isOwned) ownedCount++;
     
     const div = document.createElement('div');
-    // Rarity styles
     let borderClass = 'border-slate-200 bg-white';
     if (isOwned) {
        if (item.rarity === 3) borderClass = 'border-purple-400 bg-purple-50';
@@ -675,10 +581,9 @@ function openCollection() {
        if (item.rarity === 1) borderClass = 'border-sky-400 bg-sky-50';
     }
 
-    // Masking Name
     const displayName = isOwned ? item.name : (item.name.charAt(0) + '***');
 
-    div.className = `aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-2 text-center transition-all ${borderClass} ${isOwned ? 'cursor-pointer hover:scale-105 hover:shadow-lg' : 'opacity-50 grayscale'}`;
+    div.className = `aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-3 text-center transition-all ${borderClass} ${isOwned ? 'cursor-pointer hover:scale-105 hover:shadow-lg' : 'opacity-50 grayscale'}`;
     
     if (isOwned) {
         div.onclick = () => showCardDetail(item);
@@ -686,15 +591,28 @@ function openCollection() {
     
     div.innerHTML = `
       <div class="text-3xl mb-1">${isOwned ? item.icon : '🔒'}</div>
-      <div class="text-[10px] font-bold leading-tight ${isOwned ? 'text-slate-800' : 'text-slate-400'}">${displayName}</div>
-      ${isOwned && collection[item.id] > 1 ? `<div class="mt-1 text-[9px] bg-black/10 px-1 rounded-full">x${collection[item.id]}</div>` : ''}
+      <div class="text-[11px] font-black leading-tight ${isOwned ? 'text-slate-800' : 'text-slate-400'}">${displayName}</div>
+      ${isOwned && collection[item.id] > 1 ? `<div class="mt-1.5 text-[10px] bg-black/10 px-1.5 py-0.5 rounded-full font-bold">x${collection[item.id]}</div>` : ''}
     `;
     grid.appendChild(div);
   });
 
-  document.getElementById('col-count').textContent = `${ownedCount}/${ITEM_LIST.length}`;
-  els.collectionModal.classList.remove('hidden');
+  // Calculate global total count owned
+  const overallOwnedCount = Object.keys(collection).length;
+  
+  if (selectedCollectionGenre === 'all') {
+    document.getElementById('col-count').textContent = `${overallOwnedCount}/${ITEM_LIST.length}`;
+  } else {
+    document.getElementById('col-count').textContent = `${overallOwnedCount}/${ITEM_LIST.length} (単元内: ${ownedCount}/${totalCount})`;
+  }
 }
+
+// Attach filter change method to window
+window.setCollectionFilter = (genreId) => {
+  selectedCollectionGenre = genreId;
+  renderCollectionFilters();
+  renderCollectionItems();
+};
 
 function closeCollection() {
   els.collectionModal.classList.add('hidden');
@@ -703,8 +621,18 @@ function closeCollection() {
 // --- Card Detail Modal Logic ---
 function showCardDetail(item) {
     if(!item) return;
+    currentCardDetailItem = item;
+    currentCardDetailIndex = 0;
+    renderCardDetail();
+}
+
+function renderCardDetail() {
+    const item = currentCardDetailItem;
+    if(!item) return;
     
-    // Set Rarity Theme
+    const collection = getCollection();
+    const isOwned = !!collection[item.id];
+    
     const modalBox = els.cardDetailModal.firstElementChild;
     modalBox.classList.remove('border-sky-400', 'border-amber-400', 'border-purple-400');
     if (item.rarity === 1) modalBox.classList.add('border-sky-400');
@@ -714,20 +642,70 @@ function showCardDetail(item) {
     const rarityLabel = item.rarity === 3 ? 'ULTRA RARE' : (item.rarity === 2 ? 'RARE' : 'COMMON');
     const rarityColor = item.rarity === 3 ? 'text-purple-500' : (item.rarity === 2 ? 'text-amber-500' : 'text-sky-500');
 
+    // Tab buttons for switching 3 explanations/flavors (only if owned)
+    let tabsHtml = '';
+    const ownedCount = isOwned ? (collection[item.id] || 0) : 0;
+    
+    // Safety check: reset index if the saved index is locked for this item
+    if (currentCardDetailIndex > 0 && ownedCount < (currentCardDetailIndex + 1)) {
+        currentCardDetailIndex = 0;
+    }
+
+    if (isOwned) {
+        tabsHtml = `
+          <div class="flex flex-col gap-1 mb-4 shrink-0">
+            <div class="flex justify-center gap-1.5">
+               ${[0, 1, 2].map(idx => {
+                 const isUnlocked = ownedCount >= (idx + 1);
+                 if (isUnlocked) {
+                   return `
+                     <button onclick="window.setCardDetailIndex(${idx})" class="px-3 py-1.5 text-[11px] font-extrabold rounded-full border transition-all cursor-pointer ${currentCardDetailIndex === idx ? 'bg-slate-800 text-white border-slate-800 shadow-sm' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}">
+                       Ver. ${idx + 1}
+                     </button>
+                   `;
+                 } else {
+                   return `
+                     <button disabled title="同じカードを複数獲得すると解放されます" class="px-3 py-1.5 text-[11px] font-extrabold rounded-full border bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed select-none flex items-center justify-center gap-0.5">
+                       <span>Ver. ${idx + 1}</span>
+                       <span class="text-[9px] opacity-75">🔒</span>
+                     </button>
+                   `;
+                 }
+               }).join('')}
+            </div>
+
+          </div>
+        `;
+    }
+
+    const currentDesc = isOwned ? item.explanations[currentCardDetailIndex] : item.explanations[0];
+    const currentFlavor = isOwned ? item.flavors[currentCardDetailIndex] : item.flavors[0];
+
     els.cardDetailContent.innerHTML = `
-         <div class="w-full h-40 bg-slate-50 flex items-center justify-center text-7xl mb-4 relative overflow-hidden">
-             <!-- Simple shine effect background -->
+         <div class="w-full h-32 bg-slate-50 flex items-center justify-center text-6xl mb-3 relative overflow-hidden shrink-0">
              <div class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent"></div>
              <span class="relative z-10 drop-shadow-xl animate-bounce">${item.icon}</span>
          </div>
-         <div class="p-6 pt-0 w-full">
-           <h3 class="text-2xl font-black text-slate-800 mb-1 leading-tight">${item.name}</h3>
-           <div class="text-xs font-black uppercase tracking-widest ${rarityColor} mb-6 border-b pb-2">${rarityLabel}</div>
+         <div class="p-6 pt-0 w-full flex flex-col overflow-y-auto max-h-[50vh]">
+           <h3 class="text-xl font-black text-slate-800 mb-1 leading-tight">${item.name}</h3>
+           <div class="text-[10px] font-black uppercase tracking-widest ${rarityColor} mb-3 border-b pb-1 flex justify-between">
+              <span>${rarityLabel}</span>
+              ${isOwned ? `<span class="text-slate-400">所有数: x${collection[item.id]}</span>` : `<span class="text-rose-400">未獲得 (ロック)</span>`}
+           </div>
            
-           <div class="text-left bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner">
-             <p class="text-slate-600 text-sm leading-7 whitespace-pre-line font-medium">
-               ${item.flavor || item.desc}
-             </p>
+           ${tabsHtml}
+           
+           <div class="text-left bg-slate-50 p-5 rounded-xl border border-slate-100 shadow-sm flex-grow space-y-4">
+              <div>
+                 <p class="text-slate-800 text-base md:text-lg leading-relaxed whitespace-pre-line font-bold">
+                   ${isOwned ? currentDesc : (item.name.charAt(0) + '*** に隠された重要用語です。クイズをクリアして獲得しましょう！')}
+                 </p>
+              </div>
+              <div class="pt-1">
+                 <p class="text-slate-500 text-[11.5px] md:text-xs leading-relaxed whitespace-pre-line italic font-sans font-normal antialiased">
+                   ${isOwned ? currentFlavor : '（未獲得のため、コラムを読むことはできません）'}
+                 </p>
+              </div>
            </div>
          </div>
     `;
@@ -739,39 +717,67 @@ function closeCardDetail() {
     els.cardDetailModal.classList.add('hidden');
 }
 
+// Make accessible to onclick attributes in modal HTML
+window.setCardDetailIndex = (index) => {
+    currentCardDetailIndex = index;
+    renderCardDetail();
+};
+
 
 // --- Quiz Logic ---
-
 function startQuiz(genre) {
   currentGenre = genre;
   wrongAnswers = [];
   
+  if (nextButtonTimer) {
+     clearInterval(nextButtonTimer);
+     nextButtonTimer = null;
+  }
+  
   if (genre.id === 'comprehensive') {
-    // Collect questions from ALL genres
     let allQuestions = [];
+    
+    // Add some base math/base conversion questions
+    const poolMath = [
+        ...generateUnitQuestions(6),
+        ...generateBaseConvQuestions(6)
+    ];
+    allQuestions.push(...poolMath);
+    
+    // Add dynamic vocabulary questions across all other 9 genres (2 questions from each to populate comprehensively)
     genres.forEach(g => {
-        allQuestions.push(...g.questions);
+        if(g.id !== 'info_unit_base') {
+            allQuestions.push(...generateVocabularyQuestions(g.id, 2));
+        }
     });
-    // Shuffle and pick 20
+    
+    // Shuffle and pick 10 questions total for Comprehensive
     const shuffled = allQuestions.sort(() => 0.5 - Math.random());
-    currentQuestions = shuffled.slice(0, 20);
-  } else {
-    // Normal Genre: Shuffle and take up to 10
-    const shuffled = [...genre.questions].sort(() => 0.5 - Math.random());
     currentQuestions = shuffled.slice(0, 10);
+  } else {
+    if (genre.id === 'info_unit_base') {
+        const poolMath = [
+             ...generateUnitQuestions(4),
+             ...generateBaseConvQuestions(4)
+        ];
+        currentQuestions = poolMath.sort(() => 0.5 - Math.random()).slice(0, 5);
+    } else {
+        // Dynamic procedural vocab questions (5 questions)
+        currentQuestions = generateVocabularyQuestions(genre.id, 5);
+    }
   }
   
   currentQuestionIndex = 0;
   score = 0;
   bonuses = { power: 10, loft: 20, wind: 0 }; 
-  quizStartTime = Date.now(); // Start timer
+  quizStartTime = Date.now(); 
 
   els.menuContainer.classList.add('hidden');
   els.quizContainer.classList.remove('hidden');
   
   renderQuizStructure();
   renderQuestion();
-  updateQuizStatsDisplay(); // Initial display
+  updateQuizStatsDisplay(); 
 }
 
 function renderQuizStructure() {
@@ -779,72 +785,76 @@ function renderQuizStructure() {
   const headerGradient = isComp ? 'from-amber-500 to-orange-500' : 'from-emerald-600 to-teal-600';
 
   els.quizContainer.innerHTML = `
-    <div id="quiz-card" class="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden fade-in mx-4 transition-colors duration-300 flex flex-col max-h-[90vh]">
-      <div class="bg-gradient-to-r ${headerGradient} p-4 text-white text-center shadow-md relative shrink-0">
-        <button id="btn-quit-quiz" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white font-bold text-xs bg-black/20 px-3 py-1 rounded-full hover:bg-black/30 transition">✕ MENU</button>
-        <h1 class="text-lg font-bold tracking-tight mb-1 truncate px-8">${currentGenre.title}</h1>
-        <div class="flex justify-between items-center text-white/80 text-[10px] font-medium uppercase tracking-widest mt-1 px-4">
+    <div id="quiz-card" class="max-w-xl w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden fade-in mx-4 transition-colors duration-300 flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r ${headerGradient} p-3.5 text-white text-center shadow shadow-slate-100 relative shrink-0">
+        <button id="btn-quit-quiz" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/70 hover:text-white font-black text-xs bg-black/20 px-3 py-1.5 rounded-full hover:bg-black/30 transition cursor-pointer">✕ MENU</button>
+        <h1 class="text-xs sm:text-sm font-black tracking-tight truncate px-20">${currentGenre.title}</h1>
+        <div class="flex justify-between items-center text-white/90 text-[10px] font-bold uppercase tracking-widest mt-1 px-4">
             <span>Q <span id="q-idx">1</span>/${currentQuestions.length}</span>
             <span>Score <span id="val-quiz-score">0</span></span>
         </div>
       </div>
 
-      <!-- Real-time Status Bar (Seamless with Game Screen) -->
-      <div class="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-200 bg-slate-50">
-        <div class="p-2 text-center">
-            <div class="text-[10px] font-bold text-slate-400 uppercase">Power</div>
-            <div id="q-stat-power" class="font-mono font-bold text-lg text-emerald-600">10</div>
+      <div class="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100 bg-slate-50/80 shrink-0">
+        <div class="py-2 text-center">
+            <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">Power</span>
+            <span id="q-stat-power" class="font-mono font-bold text-base text-emerald-600">10</span>
         </div>
-        <div class="p-2 text-center">
-            <div class="text-[10px] font-bold text-slate-400 uppercase">Angle</div>
-            <div id="q-stat-loft" class="font-mono font-bold text-lg text-emerald-600">20°</div>
+        <div class="py-2 text-center">
+            <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">Angle</span>
+            <span id="q-stat-loft" class="font-mono font-bold text-base text-emerald-600">20°</span>
         </div>
-        <div class="p-2 text-center">
-            <div class="text-[10px] font-bold text-slate-400 uppercase">Assist</div>
-            <div id="q-stat-wind" class="font-mono font-bold text-lg text-emerald-600">0</div>
+        <div class="py-2 text-center">
+            <span class="text-[10px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">Assist</span>
+            <span id="q-stat-wind" class="font-mono font-bold text-base text-emerald-600">0</span>
         </div>
       </div>
       
-      <div class="p-4 md:p-8 overflow-y-auto flex-grow flex flex-col">
-        <div class="w-full bg-slate-200 rounded-full h-1.5 mb-4 shrink-0">
+      <div class="p-4 md:p-6 overflow-y-auto flex-grow flex flex-col justify-start">
+        <div class="w-full bg-slate-100 rounded-full h-1.5 mb-4 shrink-0">
           <div id="quiz-progress" class="${isComp ? 'bg-amber-500' : 'bg-emerald-500'} h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         
-        <div id="question-area" class="flex-grow flex flex-col">
-          <h2 id="question-text" class="text-base md:text-xl font-bold text-slate-800 mb-4 md:mb-8 text-center min-h-[3rem] flex items-center justify-center"></h2>
-          <div id="options-grid" class="grid grid-cols-1 gap-2 md:gap-3 mb-4"></div>
-        </div>
-
-        <div id="feedback-area" class="hidden text-center mt-auto pt-4 border-t border-slate-200 shrink-0">
-          <p id="feedback-text" class="text-lg font-bold mb-3"></p>
-          <button id="btn-next-question" class="w-full md:w-auto px-10 py-3 bg-slate-800 text-white rounded-lg font-bold hover:bg-slate-700 transition-colors shadow-lg border border-transparent">Next</button>
+        <div id="question-area" class="flex-grow flex flex-col justify-center">
+          <div class="text-[11px] font-bold text-emerald-600 tracking-wider text-center uppercase mb-2">
+             次の説明文や問いに最も当てはまる用語を選択してください。
+          </div>
+          <h2 id="question-text" class="text-sm sm:text-base md:text-lg font-bold text-slate-800 mb-4 text-center min-h-[3.5rem] px-3.5 flex items-center justify-center whitespace-pre-wrap leading-relaxed bg-slate-50/50 rounded-xl py-3 border border-slate-100 shadow-inner"></h2>
+          <div id="options-grid" class="grid grid-cols-1 gap-2 mb-2"></div>
         </div>
         
-        <div id="result-area" class="hidden text-center space-y-4 md:space-y-6 pb-4">
-          <div class="text-4xl md:text-5xl mb-2 animate-bounce">🎊</div>
-          <h2 class="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">Stage Clear!</h2>
-          <p class="text-slate-500">Score: <span id="val-result-score" class="font-bold ${isComp ? 'text-amber-500' : 'text-emerald-600'} text-2xl">${score}</span> / ${currentQuestions.length}</p>
+        <div id="result-area" class="hidden text-center space-y-4 pb-1 flex-grow flex flex-col justify-center">
+          <div class="text-3xl animate-bounce">🎊</div>
+          <h2 class="text-lg font-bold text-slate-800 tracking-tight leading-none">Stage Clear!</h2>
+          <p class="text-slate-500 text-xs leading-none">Score: <span id="val-result-score" class="font-bold ${isComp ? 'text-amber-500' : 'text-emerald-600'} text-base">${score}</span> / ${currentQuestions.length}</p>
           
-          <div id="review-list-container"></div>
+          <div id="review-list-container" class="shrink-0"></div>
 
-          <div class="bg-slate-50 p-4 rounded-xl text-left text-xs md:text-sm text-slate-600 space-y-2 border border-slate-200 shadow-inner">
-            <p class="font-bold text-center mb-2 text-base ${isComp ? 'text-amber-500' : 'text-emerald-600'}">Item Get!</p>
-            <div class="flex justify-between items-center border-b border-slate-200 pb-1">
-              <span>⚡ Power Module</span> <span id="bonus-power" class="font-bold text-lg text-emerald-600">+0</span>
+          <div class="bg-slate-50 p-4 rounded-xl text-left text-xs text-slate-600 space-y-1.5 border border-slate-150 shadow-inner shrink-0">
+            <p class="font-bold text-center mb-1.5 text-xs text-slate-800">獲得ボーナスパラメータ</p>
+            <div class="flex justify-between items-center border-b border-slate-200/50 pb-1">
+              <span>⚡ Power Module</span> <span id="bonus-power" class="font-black text-base text-emerald-600">+0</span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-200 pb-1">
-              <span>📐 Angle Gear</span> <span id="bonus-loft" class="font-bold text-lg text-emerald-600">+0°</span>
+            <div class="flex justify-between items-center border-b border-slate-200/50 pb-1">
+              <span>📐 Angle Gear</span> <span id="bonus-loft" class="font-black text-base text-emerald-600">+0°</span>
             </div>
-            <div class="flex justify-between items-center">
-              <span>💨 Assist Fan</span> <span id="bonus-wind" class="font-bold text-lg text-emerald-600">+0</span>
+            <div class="flex justify-between items-center pb-0.5">
+              <span>💨 Assist Fan</span> <span id="bonus-wind" class="font-black text-base text-emerald-600">+0</span>
             </div>
           </div>
 
-          <button id="btn-start-game" class="w-full py-3 md:py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold text-lg shadow-lg hover:translate-y-[-2px] transition-all border border-emerald-500/50">
+          <button id="btn-start-game" class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold text-sm shadow hover:scale-[1.01] hover:shadow-lg transition-all border border-emerald-500/20 shrink-0 cursor-pointer">
             PLAY BONUS GAME 🤖
           </button>
         </div>
       </div>
+
+      <!-- Feedback Area as a Sticky Fixed Footer to prevent scrolling next button -->
+      <div id="feedback-area" class="hidden text-center p-4 bg-slate-50 border-t border-slate-100 shrink-0">
+        <p id="feedback-text" class="text-xs md:text-sm font-bold mb-3"></p>
+        <button id="btn-next-question" class="w-full py-3 bg-slate-800 hover:bg-slate-700 active:scale-98 text-white rounded-xl font-bold transition shadow border border-transparent text-sm cursor-pointer">Next</button>
+      </div>
+
     </div>
   `;
   
@@ -866,14 +876,12 @@ function updateQuizStatsDisplay() {
 function renderQuestion() {
   const q = currentQuestions[currentQuestionIndex];
   
-  // Reset card styles
   const card = document.getElementById('quiz-card');
   if (card) {
-     card.classList.remove('bg-emerald-100', 'border-emerald-500', 'bg-rose-100', 'border-rose-500');
+     card.classList.remove('bg-emerald-50', 'border-emerald-400', 'bg-rose-50', 'border-rose-400');
      card.classList.add('bg-white', 'border-slate-200');
   }
 
-  // Set start time for speed bonus
   questionStartTime = Date.now();
 
   document.getElementById('q-idx').textContent = currentQuestionIndex + 1;
@@ -885,19 +893,16 @@ function renderQuestion() {
   const pct = (currentQuestionIndex / currentQuestions.length) * 100;
   document.getElementById('quiz-progress').style.width = `${pct}%`;
 
-  // Create array of indices 0..n-1 and shuffle
   currentShuffledIndices = Array.from({length: q.options.length}, (_, i) => i);
   for (let i = currentShuffledIndices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [currentShuffledIndices[i], currentShuffledIndices[j]] = [currentShuffledIndices[j], currentShuffledIndices[i]];
   }
 
-  // Render options based on shuffled indices
   currentShuffledIndices.forEach((originalIndex, visualIndex) => {
     const btn = document.createElement('button');
-    btn.className = `quiz-option w-full p-3 md:p-4 text-left border-2 border-slate-200 rounded-xl font-medium text-sm md:text-base text-slate-600 hover:border-emerald-500 hover:text-emerald-600 bg-white transition-all`;
+    btn.className = `quiz-option w-full py-3.5 px-4 text-left border-2 border-slate-200 rounded-2xl font-bold text-sm sm:text-base text-slate-700 hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50/20 bg-white transition-all shadow-md active:scale-98 min-h-[50px] cursor-pointer flex items-center justify-start`;
     btn.textContent = q.options[originalIndex];
-    // Pass visualIndex so we can select the button in DOM, but use originalIndex for correctness check
     btn.onclick = () => handleAnswer(visualIndex);
     grid.appendChild(btn);
   });
@@ -917,37 +922,26 @@ function handleAnswer(visualIndex) {
 
   const feedbackText = document.getElementById('feedback-text');
   const card = document.getElementById('quiz-card');
-  
-  // Create Explanation Element
-  const expHtml = q.explanation ? 
-    `<div class="mt-2 md:mt-4 p-3 md:p-4 text-xs md:text-sm text-left bg-slate-50 rounded-lg border border-slate-100 text-slate-600 animate-in fade-in slide-in-from-bottom-2 max-h-32 overflow-y-auto">
-       <div class="font-bold text-[10px] uppercase mb-1 opacity-70">💡 Point</div>
-       ${q.explanation}
-    </div>` : '';
+  const btnNext = document.getElementById('btn-next-question');
   
   if (isCorrect) {
-    // Change card background to green
     card.classList.remove('bg-white', 'border-slate-200');
-    card.classList.add('bg-emerald-100', 'border-emerald-500');
+    card.classList.add('bg-emerald-50', 'border-emerald-400');
 
     options[visualIndex].classList.add('correct');
     options[visualIndex].classList.remove('opacity-60');
     score++;
     
-    // Update live score display
     const scoreEl = document.getElementById('val-quiz-score');
     if(scoreEl) scoreEl.textContent = score;
 
-    // Bonus Logic
-    let totalPoints = 6;
+    // Point distribution (Doubled for regular 5-question genres, normal for 10-question comprehensive)
+    const isComp = currentGenre.id === 'comprehensive';
+    let totalPoints = isComp ? 6 : 12;
     
     const elapsedSeconds = (Date.now() - questionStartTime) / 1000;
     if (elapsedSeconds <= 5) {
-      totalPoints += 1;
-    }
-    
-    if (currentGenre.id === 'comprehensive') {
-        totalPoints = Math.ceil(totalPoints * 0.5);
+      totalPoints += isComp ? 1 : 2;
     }
     
     const dist = distributePoints(totalPoints);
@@ -955,36 +949,61 @@ function handleAnswer(visualIndex) {
     bonuses.loft += dist.loft;
     bonuses.wind += dist.wind;
     
-    // Update Stats Display in Quiz UI
     updateQuizStatsDisplay();
     
     let bStr = [];
     if (dist.power > 0) bStr.push(`Power +${dist.power}`);
-    if (dist.loft > 0) bStr.push(`Angle +${dist.loft}`);
+    if (dist.loft > 0) bStr.push(`Angle +${dist.loft}°`);
     if (dist.wind > 0) bStr.push(`Assist +${dist.wind}`);
 
     feedbackText.innerHTML = `
-      <span class="text-emerald-600 block text-lg md:text-xl mb-1">Correct!</span>
-      <span class="text-amber-500 text-xs md:text-sm font-bold">✨ ${bStr.join(' ')}</span>
-      ${expHtml}
+      <span class="text-emerald-600 block text-xs font-black mb-0.5">Correct! (正解)</span>
+      <span class="text-amber-500 text-[10px] font-bold font-mono">✨ ${bStr.join(' ')}</span>
     `;
+
+    // Normal Next button behavior, instantly active
+    btnNext.disabled = false;
+    btnNext.textContent = "Next ➔";
+    btnNext.classList.remove('opacity-50', 'cursor-not-allowed');
+
   } else {
-    // Change card background to red
     card.classList.remove('bg-white', 'border-slate-200');
-    card.classList.add('bg-rose-100', 'border-rose-500');
+    card.classList.add('bg-rose-50', 'border-rose-400');
 
     options[visualIndex].classList.add('wrong');
     
-    // Find the visual index of the correct answer to highlight it
     const correctVisualIndex = currentShuffledIndices.indexOf(q.a);
     if (correctVisualIndex !== -1) {
         options[correctVisualIndex].classList.add('correct');
         options[correctVisualIndex].classList.remove('opacity-60');
     }
     
-    feedbackText.innerHTML = `<span class="text-rose-500 block text-lg md:text-xl">Incorrect...</span>${expHtml}`;
+    feedbackText.innerHTML = `
+        <span class="text-rose-500 block text-xs font-black mb-0.5">Incorrect... (不正解)</span>
+        <span class="text-[9px] text-slate-500 block">正解: <strong class="text-emerald-600">${q.options[q.a]}</strong></span>
+    `;
     
-    // Record Wrong Answer
+    // Disable Next Button for 5 seconds countdown on mistaking
+    btnNext.disabled = true;
+    btnNext.classList.add('opacity-50', 'cursor-not-allowed');
+    
+    let secondsLeft = 5;
+    btnNext.textContent = `Next (${secondsLeft}s)`;
+    
+    if (nextButtonTimer) clearInterval(nextButtonTimer);
+    nextButtonTimer = setInterval(() => {
+      secondsLeft--;
+      if (secondsLeft <= 0) {
+        clearInterval(nextButtonTimer);
+        nextButtonTimer = null;
+        btnNext.disabled = false;
+        btnNext.textContent = "Next ➔";
+        btnNext.classList.remove('opacity-50', 'cursor-not-allowed');
+      } else {
+        btnNext.textContent = `Next (${secondsLeft}s)`;
+      }
+    }, 1000);
+    
     wrongAnswers.push({
       q: q.q,
       correct: q.options[q.a],
@@ -1007,6 +1026,11 @@ function distributePoints(points) {
 }
 
 function nextQuestion() {
+  if (nextButtonTimer) {
+     clearInterval(nextButtonTimer);
+     nextButtonTimer = null;
+  }
+
   currentQuestionIndex++;
   document.getElementById('feedback-area').classList.add('hidden');
   
@@ -1018,13 +1042,17 @@ function nextQuestion() {
 }
 
 function showResults() {
+  if (nextButtonTimer) {
+     clearInterval(nextButtonTimer);
+     nextButtonTimer = null;
+  }
+
   document.getElementById('question-area').classList.add('hidden');
   const resArea = document.getElementById('result-area');
   resArea.classList.remove('hidden');
   resArea.classList.add('fade-in');
   document.getElementById('quiz-progress').style.width = '100%';
 
-  // FIX: Update the score in the result view. The span ID was added in renderQuizStructure.
   const scoreEl = document.getElementById('val-result-score');
   if (scoreEl) scoreEl.textContent = score;
 
@@ -1032,18 +1060,17 @@ function showResults() {
   document.getElementById('bonus-loft').textContent = `Lv. ${bonuses.loft}`;
   document.getElementById('bonus-wind').textContent = `Lv. ${bonuses.wind}`;
 
-  // Render Review List
   const container = document.getElementById('review-list-container');
   if (wrongAnswers.length > 0) {
       container.innerHTML = `
-        <div class="mt-4 md:mt-6 bg-rose-50 p-3 md:p-4 rounded-xl border border-rose-200 text-left">
-          <h3 class="font-bold text-rose-600 mb-3 text-xs md:text-sm uppercase flex items-center gap-2"><span>⚠️</span> Review Mistakes</h3>
-          <div class="space-y-3 max-h-32 md:max-h-40 overflow-y-auto pr-2 text-[10px] md:text-sm custom-scrollbar">
+        <div class="mt-1 bg-rose-50 p-2 rounded-xl border border-rose-100 text-left">
+          <h3 class="font-bold text-rose-600 mb-1.5 text-[9px] uppercase flex items-center gap-1"><span>⚠️</span> 復習ポイント</h3>
+          <div class="space-y-1.5 max-h-24 overflow-y-auto pr-1 text-[9px] custom-scrollbar">
             ${wrongAnswers.map(w => `
-              <div class="border-b border-rose-100 pb-2 last:border-0 last:pb-0">
-                <p class="font-bold text-slate-700 mb-1 leading-snug">${w.q}</p>
-                <div class="flex justify-between items-center">
-                   <span class="text-rose-500 line-through decoration-2 opacity-70 truncate max-w-[45%]">${w.selected}</span>
+              <div class="border-b border-rose-100/50 pb-1 last:border-0 last:pb-0">
+                <p class="font-bold text-slate-700 mb-0.5 leading-snug">${w.q}</p>
+                <div class="flex justify-between items-center bg-white/70 px-1.5 py-0.5 rounded border border-rose-50">
+                   <span class="text-rose-500 line-through opacity-70 truncate max-w-[45%]">${w.selected}</span>
                    <span class="text-emerald-600 font-bold truncate max-w-[45%]">👉 ${w.correct}</span>
                 </div>
               </div>
@@ -1064,34 +1091,347 @@ function showResults() {
 }
 
 function transitionToGame() {
-  // 1. Reset Game Physics & Status (IDLE)
+  if (nextButtonTimer) {
+     clearInterval(nextButtonTimer);
+     nextButtonTimer = null;
+  }
+
   resetGame();
 
-  // Spam Detection
   const quizDuration = (Date.now() - quizStartTime) / 1000;
-  // Threshold: e.g., less than 1.5 seconds per question avg AND low score
-  const isSpam = (quizDuration < currentQuestions.length * 1.5) && (score <= 5);
+  const totalLimit = currentQuestions.length;
+  const isSpam = (quizDuration < totalLimit * 1.5) && (score <= (totalLimit / 2));
 
-  // 2. Apply New Parameters from Quiz
-  // PASS SCORE TO APP.JS
   updateParams({
     power: bonuses.power,
     loft: bonuses.loft,
     wind: bonuses.wind
-  }, currentGenre.id, score, isSpam);
+  }, currentGenre.id, score, isSpam, totalLimit);
 
-  // 3. Update UI Visibility
   els.quizContainer.classList.add('hidden');
   els.menuContainer.classList.add('hidden'); 
   els.gameContainer.classList.remove('blur-md');
   els.gameContainer.style.zIndex = '10';
 
-  // 4. Auto Launch after a short delay for visual transition
-  // This ensures params are set and UI is ready before physics starts
   setTimeout(() => {
     launchBall();
   }, 600);
 }
 
-// Directly call init since module script is deferred by default
+// --- Submit Report Preview & Download (Canvas Generator with Web Stamp) ---
+function openSubmitModal() {
+  if (els.submitModal) {
+    els.submitModal.classList.remove('hidden');
+    
+    // Retrieve previous saved profile if exists
+    const savedGrade = localStorage.getItem('golf_submit_user_grade') || "";
+    const savedClass = localStorage.getItem('golf_submit_user_class') || "";
+    const savedNumber = localStorage.getItem('golf_submit_user_number') || "";
+    const savedName = localStorage.getItem('golf_submit_user_name') || "";
+    
+    if (els.submitUserGrade) els.submitUserGrade.value = savedGrade;
+    if (els.submitUserClass) els.submitUserClass.value = savedClass;
+    if (els.submitUserNumber) els.submitUserNumber.value = savedNumber;
+    if (els.submitUserName) els.submitUserName.value = savedName;
+    
+    generateReportCanvas();
+  }
+}
+
+function closeSubmitModal() {
+  if (els.submitModal) {
+    els.submitModal.classList.add('hidden');
+  }
+}
+
+function generateReportCanvas() {
+  const canvas = els.reportCanvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const grade = els.submitUserGrade ? els.submitUserGrade.value.trim() : "";
+  const className = els.submitUserClass ? els.submitUserClass.value.trim() : "";
+  const number = els.submitUserNumber ? els.submitUserNumber.value.trim() : "";
+  const name = els.submitUserName ? els.submitUserName.value.trim() : "";
+
+  // Save profile information dynamically to localStorage
+  localStorage.setItem('golf_submit_user_grade', grade);
+  localStorage.setItem('golf_submit_user_class', className);
+  localStorage.setItem('golf_submit_user_number', number);
+  localStorage.setItem('golf_submit_user_name', name);
+
+  // Clear Canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 1. Background Fill color
+  ctx.fillStyle = '#FAFAFA';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 2. Beautiful frame borders
+  ctx.strokeStyle = '#D1D5DB';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(26, 26, canvas.width - 52, canvas.height - 52);
+
+  // 3. Diagonal low-opacity watermarked background pattern
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  ctx.fillStyle = '#0F172A';
+  ctx.font = 'bold 24px "Helvetica Neue", sans-serif';
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(-Math.PI / 6); // -30 Deg Rotation
+  const watermarkText = `${EXAM_CONFIG.subjectName} ${EXAM_CONFIG.termName} ${EXAM_CONFIG.reportSubtitleSuffix}`;
+  for (let x = -canvas.width * 1.5; x <= canvas.width * 1.5; x += 440) {
+    for (let y = -canvas.height * 1.5; y <= canvas.height * 1.5; y += 180) {
+      ctx.fillText(watermarkText, x, y);
+    }
+  }
+  ctx.restore();
+
+  // 4. Header title of certificate
+  ctx.fillStyle = '#0F172A';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 28px "Georgia", "MS Gothic", sans-serif';
+  const reportFullTitle = `「${EXAM_CONFIG.subjectName}」 ${EXAM_CONFIG.termName}${EXAM_CONFIG.reportTitleSuffix}`;
+  ctx.fillText(reportFullTitle, canvas.width / 2, 85);
+
+  // Decorative thin header separator
+  ctx.strokeStyle = '#E5E7EB';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(50, 115);
+  ctx.lineTo(canvas.width - 50, 115);
+  ctx.stroke();
+
+  // 5. Output date info (top-right align)
+  const pad = (n) => String(n).padStart(2, '0');
+  const d = new Date();
+  const dateStr = `出力日時: ${d.getFullYear()}年${pad(d.getMonth()+1)}月${pad(d.getDate())}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  ctx.fillStyle = '#6B7280';
+  ctx.font = '12px Courier, monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(dateStr, canvas.width - 50, 138);
+
+  // 6. Student Profile Identity Row (Balanced Left-Right aligning)
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText("提出者所属:", 50, 175);
+
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = '#374151';
+  ctx.fillText(`第 ${grade || ' ＿ '} 学年   ${className || ' ＿ '} 組   ${number || ' ＿ '} 番`, 145, 175);
+
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillText("氏名:", 450, 175);
+
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillStyle = '#1D4ED8'; // elegant highlight blue
+  ctx.fillText(name || "（ここに氏名を入力してください）", 500, 175);
+
+  // Underlines for input indicators
+  ctx.strokeStyle = '#D1D5DB';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  // Underline for Grade/Class/Number
+  ctx.moveTo(140, 182);
+  ctx.lineTo(410, 182);
+  // Underline for Name
+  ctx.moveTo(495, 182);
+  ctx.lineTo(750, 182);
+  ctx.stroke();
+
+  // 7. General stats row boxes
+  const statsList = getCollectionStats();
+  
+  // Calculate best overall distance across all units (including comprehensive)
+  let globalBestDistance = 0;
+  const allReportCategories = [...genres, comprehensiveGenre];
+  allReportCategories.forEach(g => {
+    const s = getStats(g.id);
+    if (s.maxDistance > globalBestDistance) {
+      globalBestDistance = s.maxDistance;
+    }
+  });
+
+  // Calculate overall card completion percentage
+  const cardPct = statsList.total > 0 ? ((statsList.owned / statsList.total) * 100).toFixed(1) : "0.0";
+
+  // Box 1: Collection Card status
+  ctx.fillStyle = '#FFFFFF';
+  ctx.strokeStyle = '#E5E7EB';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(50, 210, 330, 85, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#4B5563';
+  ctx.font = 'bold 12.5px sans-serif';
+  ctx.fillText("📁 IT用語カード収集率", 70, 240);
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText(`${statsList.owned} / ${statsList.total} 枚 (${cardPct}%)`, 70, 274);
+
+  // Box 2: High Score distance stats
+  ctx.fillStyle = '#FFFFFF';
+  ctx.strokeStyle = '#E5E7EB';
+  ctx.beginPath();
+  ctx.roundRect(canvas.width - 380, 210, 330, 85, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#4B5563';
+  ctx.font = 'bold 12.5px sans-serif';
+  ctx.fillText("⛳️ クラブベスト飛距離", canvas.width - 360, 240);
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText(`${globalBestDistance.toFixed(1)} m`, canvas.width - 360, 274);
+
+  // 8. Unit detailed list header text
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillText("📌 単元別クリアスコア・成績一覧（プリント範囲に準拠）", 50, 332);
+
+  // 10. Table columns details
+  const startY = 352;
+  const rowHeight = 60; // Slightly more compact to comfortably fit 10 categories
+
+  // Header background row
+  ctx.fillStyle = '#374151';
+  ctx.beginPath();
+  ctx.roundRect(50, startY, 700, 35, { topLeft: 6, topRight: 6 });
+  ctx.fill();
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 11.5px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText("講義・単元カテゴリ名", 50 + 12, startY + 22);
+  ctx.textAlign = 'center';
+  ctx.fillText("最高正答数", 540, startY + 22);
+  ctx.fillText("最長飛距離", 675, startY + 22);
+
+  // Table Body alternation rows
+  let currentY = startY + 35;
+  allReportCategories.forEach((genre, index) => {
+    const genreStats = getStats(genre.id);
+    const maxCorrect = genreStats.maxCorrect || 0;
+    const maxDistance = genreStats.maxDistance || 0;
+
+    // Zebra design background color
+    ctx.fillStyle = index % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
+    ctx.fillRect(50, currentY, 700, rowHeight);
+
+    // Row bottom separator line
+    ctx.strokeStyle = '#F3F4F6';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(50, currentY + rowHeight);
+    ctx.lineTo(750, currentY + rowHeight);
+    ctx.stroke();
+
+    // Align texts
+    ctx.fillStyle = '#1F2937';
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(genre.title, 50 + 12, currentY + 25);
+    
+    // Core detail overview list
+    ctx.fillStyle = '#6B7280';
+    ctx.font = '10px sans-serif';
+    const shortDesc = genre.description.length > 70 ? genre.description.substring(0, 68) + "..." : genre.description;
+    ctx.fillText(shortDesc, 50 + 12, currentY + 44);
+
+    // Accuracy numbers and colors (Centered at 540)
+    ctx.textAlign = 'center';
+    ctx.fillStyle = maxCorrect >= 8 ? '#059669' : (maxCorrect > 0 ? '#4F46E5' : '#9CA3AF');
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(`${maxCorrect} / 10 問`, 540, currentY + 35);
+
+    // High Score Meter (Centered at 675)
+    ctx.fillStyle = maxDistance > 0 ? '#111827' : '#9CA3AF';
+    ctx.font = 'bold 12.5px sans-serif';
+    ctx.fillText(maxDistance > 0 ? `${maxDistance.toFixed(1)} m` : "未クリア", 675, currentY + 35);
+
+    currentY += rowHeight;
+  });
+
+  // Footer metadata
+  ctx.fillStyle = '#4B5563';
+  ctx.textAlign = 'left';
+  ctx.font = '10px sans-serif';
+  ctx.fillText("※ 提出される画像の記録はブラウザ上で生徒が到達した最高スコアを表します。", 50, currentY + 35);
+
+  // Red circle academic stamp verification
+  ctx.save();
+  ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(680, currentY + 45, 33, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(680, currentY + 45, 28, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.75)';
+  ctx.font = 'bold 10.5px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText("学習成果", 680, currentY + 40);
+  ctx.fillText("確認済印", 680, currentY + 55);
+  ctx.restore();
+
+  // Signature validation zone text
+  ctx.fillStyle = '#4B5563';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${EXAM_CONFIG.subjectName} 担当教職員 承認印:`, 485, currentY + 48);
+
+  // Save base64 snapshot to img preview slot dynamically
+  try {
+    const dataUrl = canvas.toDataURL('image/png');
+    if (els.reportPreviewImg) {
+      els.reportPreviewImg.src = dataUrl;
+    }
+  } catch (err) {
+    console.error("Failed to swap URL preview:", err);
+  }
+}
+
+function downloadReportImage() {
+  const canvas = els.reportCanvas;
+  if (!canvas) return;
+
+  const grade = els.submitUserGrade ? els.submitUserGrade.value.trim() : "";
+  const className = els.submitUserClass ? els.submitUserClass.value.trim() : "";
+  const number = els.submitUserNumber ? els.submitUserNumber.value.trim() : "";
+  const name = els.submitUserName ? els.submitUserName.value.trim() : "";
+
+  const profileParts = [];
+  if (grade) profileParts.push(`${grade}年`);
+  if (className) profileParts.push(`${className}組`);
+  if (number) profileParts.push(`${number}番`);
+  if (name) profileParts.push(name);
+
+  const filenamePrefix = `${EXAM_CONFIG.subjectName}_${EXAM_CONFIG.termName}_report`;
+  const filenameSuffix = profileParts.length > 0 ? `_${profileParts.join('_')}` : "";
+  const filename = `${filenamePrefix}${filenameSuffix}.png`;
+
+  try {
+    const dataUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    link.click();
+  } catch (err) {
+    alert("画像のダウンロードに失敗しました。プレビュー画像を長押し、または右クリックして保存を試してください。");
+  }
+}
+
 init();
