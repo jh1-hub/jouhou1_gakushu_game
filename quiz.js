@@ -180,29 +180,37 @@ function generateBaseConvQuestions(count = 10) {
   return qs;
 }
 
-// Generate Vocab Questions dynamically based on selected genre (Always 4-options, mixed QA type)
-function generateVocabularyQuestions(genreId, count = 5) {
-  const items = ITEM_LIST.filter(item => item.genre_id === genreId);
-  if (items.length === 0) return [];
+// Function to update vocabulary statistics when an answer is placed
+function recordVocabStat(itemId, isCorrect) {
+  if (!itemId) return;
+  const stored = localStorage.getItem('golf_vocab_stats');
+  let stats = stored ? JSON.parse(stored) : {};
+  if (!stats[itemId]) {
+    stats[itemId] = { attempts: 0, corrects: 0 };
+  }
+  stats[itemId].attempts++;
+  if (isCorrect) {
+    stats[itemId].corrects++;
+  }
+  localStorage.setItem('golf_vocab_stats', JSON.stringify(stats));
+}
 
-  // Shuffle items to ensure UNIQUENESS in the session
-  const shuffledItems = [...items].sort(() => 0.5 - Math.random());
-  
+// Low-level helper to transform a list of item objects to 4-option quiz questions
+function generateVocabQuestionsForItems(itemsToUse) {
   const qs = [];
-  const itemsToUse = shuffledItems.slice(0, Math.min(count, shuffledItems.length));
-  
   for (let i = 0; i < itemsToUse.length; i++) {
     const targetItem = itemsToUse[i];
     const descIdx = Math.floor(Math.random() * 3);
     const targetDesc = targetItem.explanations[descIdx];
     const correctText = targetItem.name;
+    const genreId = targetItem.genre_id;
     
-    // Choose pattern: 50% explanation-to-word, 50% word-to-explanation
+    const itemsInGenre = ITEM_LIST.filter(item => item.genre_id === genreId);
     const isWordToDesc = Math.random() < 0.5;
     
     if (!isWordToDesc) {
       // Type A: Explanation -> Word
-      const sameGenreWrong = items.filter(item => item.id !== targetItem.id);
+      const sameGenreWrong = itemsInGenre.filter(item => item.id !== targetItem.id);
       let wrongOptions = [];
       const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
       wrongOptions.push(...shuffledSameGenre.map(item => item.name));
@@ -228,13 +236,13 @@ function generateVocabularyQuestions(genreId, count = 5) {
         q: targetDesc,
         options: shuffledOptions,
         a: correctIdx,
-        genre_id: genreId
+        genre_id: genreId,
+        item_id: targetItem.id
       });
     } else {
       // Type B: Word -> Explanation
       const correctExplain = targetDesc;
-      
-      const sameGenreWrong = items.filter(item => item.id !== targetItem.id);
+      const sameGenreWrong = itemsInGenre.filter(item => item.id !== targetItem.id);
       let wrongOptions = [];
       const shuffledSameGenre = sameGenreWrong.sort(() => 0.5 - Math.random());
       
@@ -265,12 +273,68 @@ function generateVocabularyQuestions(genreId, count = 5) {
         q: `用語「${correctText}」の説明として最も適切なものはどれか。`,
         options: shuffledOptions,
         a: correctIdx,
-        genre_id: genreId
+        genre_id: genreId,
+        item_id: targetItem.id
       });
     }
   }
-  
   return qs;
+}
+
+// Generate Vocab Questions dynamically based on selected genre (Always 4-options, mixed QA type)
+function generateVocabularyQuestions(genreId, count = 5) {
+  const items = ITEM_LIST.filter(item => item.genre_id === genreId);
+  if (items.length === 0) return [];
+  const shuffledItems = [...items].sort(() => 0.5 - Math.random());
+  const itemsToUse = shuffledItems.slice(0, Math.min(count, shuffledItems.length));
+  return generateVocabQuestionsForItems(itemsToUse);
+}
+
+// Generate vocabulary weakness targeted questions (Weakness recovery)
+function generateWeaknessQuestions(count = 5) {
+  const stored = localStorage.getItem('golf_vocab_stats');
+  const stats = stored ? JSON.parse(stored) : {};
+  
+  const itemsWithStats = ITEM_LIST.map(item => {
+    const s = stats[item.id] || { attempts: 0, corrects: 0 };
+    const accuracy = s.attempts > 0 ? (s.corrects / s.attempts) : 1.0;
+    return {
+      item,
+      attempts: s.attempts,
+      corrects: s.corrects,
+      accuracy: accuracy
+    };
+  });
+  
+  // Separate into attempted and unattempted
+  const attempted = itemsWithStats.filter(x => x.attempts >= 1);
+  const unattempted = itemsWithStats.filter(x => x.attempts === 0);
+  
+  // Sort attempted by correct rate ascending (worst performing terms first)
+  attempted.sort((a, b) => {
+    if (a.accuracy !== b.accuracy) {
+      return a.accuracy - b.accuracy;
+    }
+    // tie-breaker: sort by attempts ascending (fewer attempts gets attention) or random
+    return 0.5 - Math.random();
+  });
+  
+  // Build candidate pool
+  // Take up to twice correct size, say 10
+  const worstCount = Math.max(10, count * 2);
+  let pool = attempted.slice(0, worstCount);
+  
+  if (pool.length < worstCount) {
+    const shuffledUnattempted = [...unattempted].sort(() => 0.5 - Math.random());
+    const needed = worstCount - pool.length;
+    pool.push(...shuffledUnattempted.slice(0, needed));
+  }
+  
+  // Select "count" items randomly from this poor/unattempted pool
+  const finalPool = pool.sort(() => 0.5 - Math.random());
+  const selectedItems = finalPool.slice(0, Math.min(count, finalPool.length)).map(x => x.item);
+  
+  return generateVocabQuestionsForItems(selectedItems);
 }
 
 // --- Quiz Data Structure: 7 Consolidated Genres ---
@@ -286,42 +350,42 @@ const genres = [
     id: '01_02_info_media_solving',
     title: '01・02 情報の特性と問題解決',
     icon: '💡',
-    description: '一次・二次・三次情報、情報の残存性・複製性・伝播性、ブレーンストーミング、KJ法、MECE、ロジックツリー、ガントチャートによる進捗管理',
+    description: '一次・二次・三次情報、情報の特性（残存性・複製性・伝播性、個別性・トレードオフ・目的性）、知識、情報源、クロスチェック、企画・管理手法（ブレスト、KJ法、MECE、ロジックツリー、ガントチャート）',
     questions: []
   },
   {
     id: '03_04_moral_personal',
     title: '03・04 情報モラルと個人情報',
     icon: '👤',
-    description: '情報モラルの基本、デジタルデバイド、フィルターバブル、エコーチェンバー、ネット依存、個人情報定義、個人識別符号、肖像権、ジオタグ、プライバシーポリシー',
+    description: 'モラル、デバイド、フィルターバブル、エコーチェンバー、ネット依存、個人情報、要配慮個人情報、匿名加工情報、保護法、オプトイン・オプトアウト、肖像権、パブリシティ権、ジオタグ、Pマーク',
     questions: []
   },
   {
     id: '05_intellectual_property',
     title: '05 知的財産権',
     icon: '🎨',
-    description: '産業財産権（特許・実用新案・意匠・商標）と著作権、方式・無方式主義、著作者人格権、同一性保持権、複製権、パブリックドメイン、クリエイティブコモンズ',
+    description: '知的財産権（特許・実用新案・意匠・商標）、著作権、無方式・方式主義、著作者、共同著作物、引用、著作者人格権（公表権、氏名表示権、同一性保持権）、パブリックドメイン、CCライセンス',
     questions: []
   },
   {
     id: '06_info_security',
     title: '06 情報セキュリティ',
     icon: '🔒',
-    description: 'セキュリティの3大要素（機密性・完全性・可用性）、マルウェア、フィッシング詐欺、ファイアウォール、公開鍵暗号システム',
+    description: '3大要素（機密性・完全性・可用性）、マルウェア、フィッシング・ワンクリック詐欺、スキミング、重要ポリシー（アクセス制御、認証、プライバシーポリシー）、不正アクセス禁止法、ファイアウォール、攻撃（DoS、クラッキング）',
     questions: []
   },
   {
     id: '07_info_tech_dev',
     title: '07 情報技術の発展',
     icon: '📶',
-    description: '生活を支えるPOS、IoT、GPS位置測定、人工知能、Society 5.0、クラウドサービス、機械学習、ビッグデータ',
+    description: '生活を支えるPOS、IoT、GPS、AI、Society 5.0、クラウド、機械学習、ビッグデータ、決済（電子、QRコード）、EC、仮想・拡張・複合現実（VR、AR、MR）',
     questions: []
   },
   {
     id: '08_09_media_design',
     title: '08・09 メディアと情報デザイン',
     icon: '📞',
-    description: '同期・非同期型、マスメディアとSNS、双方向コミュニケーション、情報デザイン、ピクトグラム、ユニバーサルデザイン、アフォーダンス、シグニファイア、GUI',
+    description: 'メディア、活版印刷、情報の抽象化・構造化・可視化、同期・非同期型、マスメディアとSNS、情報デザイン、ピクトグラム、ユニバーサルデザイン、アフォーダンス、シグニファイア、GUI、アクセシビリティ、ユーザビリティ、UX/UI、バリアフリー',
     questions: []
   }
 ];
@@ -332,6 +396,15 @@ const comprehensiveGenre = {
   title: '総合演習 (全範囲)',
   icon: '🎓',
   description: '全ジャンルからランダムに出題。問題数10問。限界に挑戦！',
+  questions: []
+};
+
+// Special Weakness Rescue Genre Definition
+const weaknessGenre = {
+  id: 'weakness_rescue',
+  title: '🔥 苦手克服演習',
+  icon: '🔥',
+  description: '正答率が低い用語からランダムで出題。弱点を自動選定します！',
   questions: []
 };
 
@@ -362,6 +435,7 @@ function init() {
     gameContainer: document.getElementById('game-container'),
     collectionModal: document.getElementById('collection-modal'),
     genreGrid: document.getElementById('genre-grid'),
+    specialGrid: document.getElementById('special-grid'),
     btnSubmit: document.getElementById('btn-submit'),
     submitModal: document.getElementById('submit-modal'),
     btnCloseSubmit: document.getElementById('btn-close-submit'),
@@ -415,6 +489,20 @@ function init() {
   if(els.btnCollection) els.btnCollection.onclick = openCollection;
   if(els.btnCloseCollection) els.btnCloseCollection.onclick = closeCollection;
   if(els.btnCloseDetail) els.btnCloseDetail.onclick = closeCardDetail;
+  
+  // Performance Stats controls
+  const btnStatsPage = document.getElementById('btn-stats-page');
+  const btnCloseStats = document.getElementById('btn-close-stats');
+  const statsSortSelect = document.getElementById('stats-sort-select');
+  const btnStatsSubmit = document.getElementById('btn-stats-submit');
+  const btnStatsSubmitBottom = document.getElementById('btn-stats-submit-bottom');
+  const btnCloseStatsBottom = document.getElementById('btn-close-stats-bottom');
+  if (btnStatsPage) btnStatsPage.onclick = openStatsPage;
+  if (btnCloseStats) btnCloseStats.onclick = closeStatsPage;
+  if (statsSortSelect) statsSortSelect.onchange = renderStatsList;
+  if (btnStatsSubmit) btnStatsSubmit.onclick = openSubmitModal;
+  if (btnStatsSubmitBottom) btnStatsSubmitBottom.onclick = openSubmitModal;
+  if (btnCloseStatsBottom) btnCloseStatsBottom.onclick = closeStatsPage;
   
   // Make stats container clickable
   if(els.collectionStats) {
@@ -547,9 +635,11 @@ function renderMenu() {
       els.menuContainer.classList.remove('bg-gradient-to-b', 'from-amber-50', 'to-yellow-100');
   }
 
+  if (els.specialGrid) els.specialGrid.innerHTML = '';
   els.genreGrid.innerHTML = '';
-  genres.forEach(genre => renderGenreCard(genre));
+  renderWeaknessCard();
   renderGenreCard(comprehensiveGenre, true);
+  genres.forEach(genre => renderGenreCard(genre));
 }
 
 function renderGenreCard(genre, isComprehensive = false) {
@@ -581,7 +671,46 @@ function renderGenreCard(genre, isComprehensive = false) {
       <span class="font-mono font-bold text-amber-500 text-md">${stats.maxDistance.toFixed(1)}m</span>
     </div>
   `;
-  els.genreGrid.appendChild(card);
+  if (isComprehensive && els.specialGrid) {
+    els.specialGrid.appendChild(card);
+  } else {
+    els.genreGrid.appendChild(card);
+  }
+}
+
+function renderWeaknessCard() {
+  const stats = getStats('weakness_rescue');
+  
+  const card = document.createElement('div');
+  const borderClass = 'border-rose-300 bg-rose-50/10';
+  const hoverClass = 'hover:border-rose-400 hover:shadow-rose-400/20';
+  
+  card.className = `bg-white rounded-2xl p-5 shadow-lg border-2 ${borderClass} ${hoverClass} hover:-translate-y-1 transition-all cursor-pointer group flex flex-col justify-between h-full`;
+  card.onclick = () => startQuiz(weaknessGenre);
+
+  card.innerHTML = `
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <span class="text-3xl bg-rose-100 p-3 rounded-xl group-hover:scale-110 transition-transform">🔥</span>
+        <div class="text-right">
+           <div class="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Cleared</div>
+           <div class="font-bold text-rose-600 text-xl leading-none">${stats.maxCorrect} <span class="text-slate-400 text-xs">/ 5</span></div>
+        </div>
+      </div>
+      <h3 class="text-lg font-bold text-rose-600 mb-2 leading-tight transition-colors">苦手克服演習</h3>
+      <p class="text-slate-500 text-xs mb-4 line-clamp-2">正答率が低い用語から優先的に出題します。弱点を自動判別し、確実な知識定着へ導きます。</p>
+    </div>
+    
+    <div class="bg-rose-50 rounded-lg p-3 flex justify-between items-center mt-auto border border-rose-100/50">
+      <span class="text-[10px] font-bold text-rose-400 uppercase">Best Record</span>
+      <span class="font-mono font-bold text-amber-500 text-md">${stats.maxDistance.toFixed(1)}m</span>
+    </div>
+  `;
+  if (els.specialGrid) {
+    els.specialGrid.appendChild(card);
+  } else {
+    els.genreGrid.appendChild(card);
+  }
 }
 
 function returnToMenu() {
@@ -686,6 +815,172 @@ window.setCollectionFilter = (genreId) => {
 
 function closeCollection() {
   els.collectionModal.classList.add('hidden');
+}
+
+// --- Performance Stats Page Logic ---
+let selectedStatsGenre = 'all';
+
+function openStatsPage() {
+  selectedStatsGenre = 'all';
+  const sortSelect = document.getElementById('stats-sort-select');
+  if (sortSelect) sortSelect.value = 'id_asc';
+  
+  renderStatsFilters();
+  renderStatsList();
+  document.getElementById('stats-modal').classList.remove('hidden');
+}
+
+function closeStatsPage() {
+  document.getElementById('stats-modal').classList.add('hidden');
+}
+
+window.setStatsFilter = (genreId) => {
+  selectedStatsGenre = genreId;
+  renderStatsFilters();
+  renderStatsList();
+};
+
+function renderStatsFilters() {
+  const filtersDiv = document.getElementById('stats-filters');
+  if (!filtersDiv) return;
+
+  const list = [
+    { id: 'all', title: '全カテゴリ', icon: '📖' },
+    ...genres.map(g => ({ id: g.id, title: g.title, icon: g.icon }))
+  ];
+
+  filtersDiv.innerHTML = list.map(f => {
+    const isActive = selectedStatsGenre === f.id;
+    const activeClass = isActive 
+      ? 'bg-rose-500 text-white border-rose-500 shadow-md font-bold' 
+      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-transparent hover:text-slate-900';
+    return `
+      <button onclick="window.setStatsFilter('${f.id}')" class="px-3.5 py-1.5 shrink-0 rounded-full border text-xs transition-all flex items-center gap-1.5 cursor-pointer select-none ${activeClass}">
+        <span>${f.icon}</span>
+        <span>${f.title}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function renderStatsList() {
+  const statsListDiv = document.getElementById('stats-list');
+  if (!statsListDiv) return;
+  statsListDiv.innerHTML = '';
+
+  const stored = localStorage.getItem('golf_vocab_stats');
+  const stats = stored ? JSON.parse(stored) : {};
+
+  // Map each item in ITEM_LIST to have its computed correctness rate & stats
+  let terms = ITEM_LIST.map(item => {
+    const s = stats[item.id] || { attempts: 0, corrects: 0 };
+    const accuracy = s.attempts > 0 ? (s.corrects / s.attempts) : null;
+    return {
+      item,
+      attempts: s.attempts,
+      corrects: s.corrects,
+      accuracy: accuracy
+    };
+  });
+
+  // Filter by category/genre
+  if (selectedStatsGenre !== 'all') {
+    terms = terms.filter(t => t.item.genre_id === selectedStatsGenre);
+  }
+
+  // Sort by option
+  const sortOption = document.getElementById('stats-sort-select')?.value || 'id_asc';
+  terms.sort((a, b) => {
+    if (sortOption === 'id_asc') {
+      return a.item.id - b.item.id;
+    } else if (sortOption === 'attempts_desc') {
+      return b.attempts - a.attempts;
+    } else if (sortOption === 'accuracy_asc') {
+      // Prioritize attempted ones before unattempted
+      const aVal = a.accuracy === null ? 2.0 : a.accuracy;
+      const bVal = b.accuracy === null ? 2.0 : b.accuracy;
+      if (aVal !== bVal) return aVal - bVal;
+      // tie breaker is ID asc
+      return a.item.id - b.item.id;
+    } else if (sortOption === 'accuracy_desc') {
+      const aVal = a.accuracy === null ? -1.0 : a.accuracy;
+      const bVal = b.accuracy === null ? -1.0 : b.accuracy;
+      if (aVal !== bVal) return bVal - aVal;
+      // tie breaker is ID asc
+      return a.item.id - b.item.id;
+    }
+    return 0;
+  });
+
+  if (terms.length === 0) {
+    statsListDiv.innerHTML = `
+      <div class="text-center py-8 text-slate-400 text-xs font-semibold">
+        対象の用語が見つかりません。
+      </div>
+    `;
+    return;
+  }
+
+  statsListDiv.innerHTML = terms.map(t => {
+    const item = t.item;
+    const attempts = t.attempts;
+    const corrects = t.corrects;
+    const accuracy = t.accuracy;
+
+    let pctText = '-';
+    let colorClass = 'text-slate-400 font-bold';
+    let progressBarHtml = '';
+
+    if (attempts > 0) {
+      const pctVal = Math.round(accuracy * 100);
+      pctText = `${pctVal}%`;
+      
+      let barColor = 'bg-rose-500';
+      if (accuracy >= 0.8) {
+        barColor = 'bg-emerald-500';
+        colorClass = 'text-emerald-600 font-black';
+      } else if (accuracy >= 0.4) {
+        barColor = 'bg-indigo-500';
+        colorClass = 'text-indigo-600 font-bold';
+      } else {
+        colorClass = 'text-rose-500 font-black';
+      }
+
+      progressBarHtml = `
+        <div class="w-12 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200 shrink-0">
+          <div class="${barColor} h-full" style="width: ${pctVal}%"></div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col md:grid md:grid-cols-12 md:gap-2 items-center hover:border-slate-300 hover:bg-slate-50/50 transition-all">
+         <div class="md:col-span-1 text-center text-xs font-mono font-bold text-slate-400 mb-1 md:mb-0 w-full md:w-auto flex md:justify-center justify-between">
+            <span class="md:hidden font-bold text-[10px] text-slate-400 uppercase tracking-wider">No</span>
+            <span>#${item.id}</span>
+         </div>
+         <div class="md:col-span-2 flex items-center gap-2 mb-2 md:mb-0 w-full md:w-auto">
+            <span class="text-lg shrink-0">${item.icon}</span>
+            <span class="font-bold text-slate-800 text-xs md:text-sm line-clamp-1">${item.name}</span>
+         </div>
+         <!-- Use only the first explanation, no flavour texts, explicitly matching the prompt -->
+         <div class="md:col-span-5 text-[11px] text-slate-500 line-clamp-2 md:line-clamp-none mb-2 md:mb-0 w-full leading-relaxed bg-slate-50/50 md:bg-transparent p-2 md:p-0 rounded-lg">
+            ${item.explanations[0]}
+         </div>
+         <div class="md:col-span-2 flex md:flex-col justify-between items-center md:justify-center text-xs text-slate-600 mb-1 md:mb-0 w-full md:w-auto">
+            <span class="md:hidden font-bold text-slate-400 uppercase tracking-wider text-[10px]">出題状況</span>
+            <span class="font-mono font-semibold">${corrects} / ${attempts} 回</span>
+         </div>
+         <div class="md:col-span-2 flex md:flex-row md:justify-center items-center justify-between text-xs w-full md:w-auto gap-2">
+            <span class="md:hidden font-bold text-slate-400 uppercase tracking-wider text-[10px]">正答率</span>
+            <div class="flex items-center gap-1.5 justify-end">
+               <span class="font-mono font-bold ${colorClass} text-sm">${pctText}</span>
+               ${progressBarHtml}
+            </div>
+         </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // --- Card Detail Modal Logic ---
@@ -824,6 +1119,8 @@ function startQuiz(genre) {
     // Shuffle and pick 10 questions total for Comprehensive
     const shuffled = allQuestions.sort(() => 0.5 - Math.random());
     currentQuestions = shuffled.slice(0, 10);
+  } else if (genre.id === 'weakness_rescue') {
+    currentQuestions = generateWeaknessQuestions(5);
   } else {
     if (genre.id === 'info_unit_base') {
         const poolMath = [
@@ -983,6 +1280,11 @@ function handleAnswer(visualIndex) {
   const originalIndex = currentShuffledIndices[visualIndex];
   const isCorrect = originalIndex === q.a;
   
+  // Record vocabulary statistics if this is a vocabulary question
+  if (q.item_id) {
+    recordVocabStat(q.item_id, isCorrect);
+  }
+  
   const options = document.getElementById('options-grid').children;
 
   for (let btn of options) {
@@ -1133,13 +1435,13 @@ function showResults() {
   const container = document.getElementById('review-list-container');
   if (wrongAnswers.length > 0) {
       container.innerHTML = `
-        <div class="mt-1 bg-rose-50 p-2 rounded-xl border border-rose-100 text-left">
-          <h3 class="font-bold text-rose-600 mb-1.5 text-[9px] uppercase flex items-center gap-1"><span>⚠️</span> 復習ポイント</h3>
-          <div class="space-y-1.5 max-h-24 overflow-y-auto pr-1 text-[9px] custom-scrollbar">
+        <div class="mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100 text-left">
+          <h3 class="font-bold text-rose-600 mb-1.5 text-xs uppercase flex items-center gap-1 text-xs md:text-sm"><span>⚠️</span> 復習ポイント</h3>
+          <div class="space-y-1.5 max-h-32 overflow-y-auto pr-1 text-xs custom-scrollbar">
             ${wrongAnswers.map(w => `
-              <div class="border-b border-rose-100/50 pb-1 last:border-0 last:pb-0">
+              <div class="border-b border-rose-100/50 pb-1.5 last:border-0 last:pb-0">
                 <p class="font-bold text-slate-700 mb-0.5 leading-snug">${w.q}</p>
-                <div class="flex justify-between items-center bg-white/70 px-1.5 py-0.5 rounded border border-rose-50">
+                <div class="flex justify-between items-center bg-white/70 px-2 py-1 rounded border border-rose-50">
                    <span class="text-rose-500 line-through opacity-70 truncate max-w-[45%]">${w.selected}</span>
                    <span class="text-emerald-600 font-bold truncate max-w-[45%]">👉 ${w.correct}</span>
                 </div>

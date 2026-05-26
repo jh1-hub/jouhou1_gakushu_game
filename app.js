@@ -24,7 +24,8 @@ const state = {
   particles: [],
   score: 0,
   highScore: 0, 
-  lastGachaItem: null 
+  lastGachaItem: null,
+  comprehensiveDrawsLeft: 0
 };
 
 let requestID = null;
@@ -123,7 +124,33 @@ function handleRestart() {
 
 function handleGacha() {
   const result = drawGacha(state.score, state.quizScore, state.quizTotal, state.genreId, false, state.isSpam);
+  if (state.genreId === 'comprehensive') {
+    state.comprehensiveDrawsLeft--;
+  } else {
+    state.comprehensiveDrawsLeft = 0;
+  }
   updateGachaUI(result, false);
+}
+
+function handleRestartOrNextDraw() {
+  if (state.genreId === 'comprehensive' && state.comprehensiveDrawsLeft > 0) {
+    const result = drawGacha(state.score, state.quizScore, state.quizTotal, state.genreId, false, state.isSpam);
+    state.comprehensiveDrawsLeft--;
+    
+    const card = document.getElementById('gacha-card');
+    card.classList.remove('card-flip');
+    
+    const btnReroll = document.getElementById('btn-reroll');
+    if (btnReroll) btnReroll.classList.add('hidden');
+    
+    setTimeout(() => {
+      updateGachaUI(result, false);
+    }, 400);
+    
+    return;
+  }
+  
+  handleRestart();
 }
 
 function handleReroll() {
@@ -194,6 +221,41 @@ function updateGachaUI(result, isReroll) {
       btnReroll.classList.remove('hidden');
   } else {
       btnReroll.classList.add('hidden');
+  }
+
+  // Customized draw count badging and restart button state
+  const badge = document.getElementById('gacha-title-badge');
+  const btnRestart = document.getElementById('btn-restart');
+  
+  if (state.genreId === 'comprehensive') {
+    if (state.comprehensiveDrawsLeft === 1) {
+      if (badge) {
+        badge.innerHTML = "🎉 総合演習 特典：2回引けます！ (1枚目)";
+        badge.className = "mb-4 text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1 rounded-md border border-amber-300 backdrop-blur-sm animate-pulse";
+      }
+      if (btnRestart) {
+        btnRestart.textContent = "➡️ 2枚目のカードを引く";
+        btnRestart.className = "w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg font-bold hover:from-emerald-600 hover:to-teal-600 transition-all relative z-10 shadow-lg animate-bounce text-sm";
+      }
+    } else {
+      if (badge) {
+        badge.innerHTML = "🎉 総合演習 特典：2枚目 (2枚中)";
+        badge.className = "mb-4 text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-md border border-emerald-300 backdrop-blur-sm";
+      }
+      if (btnRestart) {
+        btnRestart.textContent = "🏠 MENU";
+        btnRestart.className = "w-full py-3 bg-slate-700 text-white rounded-lg font-bold hover:bg-slate-600 transition-colors relative z-10 shadow-lg border border-slate-600 text-sm";
+      }
+    }
+  } else {
+    if (badge) {
+      badge.textContent = "Item Acquired!";
+      badge.className = "mb-4 text-sm font-bold text-slate-400 uppercase bg-white/80 px-2 py-1 rounded-md backdrop-blur-sm";
+    }
+    if (btnRestart) {
+      btnRestart.textContent = "🏠 MENU";
+      btnRestart.className = "w-full py-3 bg-slate-700 text-white rounded-lg font-bold hover:bg-slate-600 transition-colors relative z-10 shadow-lg border border-slate-600 text-sm";
+    }
   }
 
   // Animate Flip
@@ -291,6 +353,12 @@ function handleFinish(distance) {
   
   if (distance > state.highScore) {
     state.highScore = distance;
+  }
+
+  if (state.genreId === 'comprehensive') {
+    state.comprehensiveDrawsLeft = 2;
+  } else {
+    state.comprehensiveDrawsLeft = 1;
   }
 
   if (state.genreId) {
@@ -452,7 +520,7 @@ export function initGame() {
   // Using property assignment for handlers to act as a robust reset
   if (els.btnLaunch) els.btnLaunch.onclick = handleLaunch;
   if (els.btnSkip) els.btnSkip.onclick = handleSkip;
-  if (els.btnRestart) els.btnRestart.onclick = handleRestart;
+  if (els.btnRestart) els.btnRestart.onclick = handleRestartOrNextDraw;
   if (els.btnGachaDraw) els.btnGachaDraw.onclick = handleGacha;
   
   const btnReroll = document.getElementById('btn-reroll');

@@ -195,12 +195,34 @@
                             <span id="val-global-best">0.0</span><span class="text-sm text-slate-400 ml-1">m</span>
                           </div>
                       </div>
+
+                      <!-- Performance Profile Stats Button -->
+                      <button id="btn-stats-page" class="flex flex-col items-center justify-center bg-white hover:bg-rose-50 px-8 py-3 rounded-2xl shadow-md border border-slate-200 hover:border-rose-400 cursor-pointer transition-all transform hover:-translate-y-1 group">
+                          <span class="text-[10px] md:text-xs font-bold text-rose-400 uppercase tracking-widest mb-1 mt-0.5">成績レポート</span>
+                          <div class="text-base md:text-lg font-black text-rose-600 flex items-center gap-1.5 mt-0.5">
+                            <span>📊 成績表</span>
+                          </div>
+                      </button>
                    </div>
                 </div>
                 
-                <div id="genre-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 px-2">
-                   <!-- Genres will be injected here -->
-                </div>
+                <!-- 特別演習 Section -->
+                 <h2 class="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    特別演習（弱点・総合）
+                 </h2>
+                 <div id="special-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 px-2 mb-8">
+                    <!-- Spacial grid categories -->
+                 </div>
+
+                 <!-- 分野別演習 Section -->
+                 <h2 class="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    分野別演習
+                 </h2>
+                 <div id="genre-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 px-2">
+                    <!-- Genres will be injected here -->
+                 </div>
              </div>
          </div>
       </div>
@@ -228,6 +250,72 @@
               <!-- Items injected here -->
            </div>
         </div>
+      </div>
+
+      <!-- PERFORMANCE STATS MODAL (Overlay Layer) -->
+      <div id="stats-modal" class="hidden fixed inset-0 z-[60] overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-opacity duration-300">
+        <div class="bg-white w-full max-w-5xl rounded-2xl p-6 shadow-2xl border border-slate-700 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b pb-3 shrink-0">
+               <h2 class="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                 📊 用語別正答率・学習状況
+               </h2>
+               <div class="flex items-center gap-2">
+                  <button id="btn-stats-submit" class="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-extrabold px-3 py-1.5 rounded-lg shadow-md border border-teal-400 text-xs transition-all flex items-center gap-1 cursor-pointer">
+                    📤 <span class="hidden md:inline">成果</span>提出
+                  </button>
+                  <button id="btn-close-stats" class="text-slate-500 hover:text-slate-800 text-2xl font-bold bg-slate-100 hover:bg-slate-200 rounded-full w-8 h-8 flex items-center justify-center cursor-pointer">✕</button>
+               </div>
+            </div>
+            
+            <!-- Filters and Sorting Row -->
+            <div class="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between mb-4 shrink-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
+               <!-- Filter Pills for Category -->
+               <div class="flex flex-col gap-1.5 min-w-0 flex-grow">
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">カテゴリ選択</span>
+                  <div id="stats-filters" class="flex gap-1.5 overflow-x-auto pb-1 select-none custom-scrollbar">
+                     <!-- Injected by quiz.js -->
+                  </div>
+               </div>
+               
+               <!-- Sort Dropdown/Buttons -->
+               <div class="flex flex-col gap-1.5 shrink-0">
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">並び替え</span>
+                  <div class="flex items-center gap-2">
+                     <select id="stats-sort-select" class="bg-white border border-slate-200 text-xs font-semibold text-slate-700 px-3 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer animate-none">
+                        <option value="id_asc">デフォルト（用語番号順）</option>
+                        <option value="accuracy_asc">正答率「低い順」（苦手）</option>
+                        <option value="accuracy_desc">正答率「高い順」（得意）</option>
+                        <option value="attempts_desc">出題数「多い順」</option>
+                     </select>
+                  </div>
+               </div>
+            </div>
+            
+            <!-- Terms stats Table/List -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-1">
+               <div class="hidden md:grid grid-cols-12 gap-2 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b pb-2 mb-2 px-3">
+                  <div class="col-span-1 text-center font-mono">No</div>
+                  <div class="col-span-2">用語名</div>
+                  <div class="col-span-12 md:col-span-5">説明</div>
+                  <div class="col-span-2 text-center">出題状況 (正答 / 回数)</div>
+                  <div class="col-span-2 text-center">正答率</div>
+               </div>
+               
+               <div id="stats-list" class="flex flex-col gap-2.5">
+                   <!-- Term stats rows will be injected here -->
+                </div>
+             </div>
+             
+             <!-- Bottom Action Row -->
+             <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
+                <button id="btn-close-stats-bottom" class="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer">
+                  閉じる
+                </button>
+                <button id="btn-stats-submit-bottom" class="px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-lg shadow-md hover:from-emerald-600 hover:to-teal-600 text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+                  📤 成果を提出する
+                </button>
+             </div>
+         </div>
       </div>
 
       <!-- ITEM DETAIL MODAL (Overlay Layer) -->
@@ -335,7 +423,7 @@
 
           <!-- Gacha Phase -->
           <div id="view-gacha-result" class="hidden w-full flex-col items-center relative z-10 p-6">
-             <div class="mb-4 text-sm font-bold text-slate-400 uppercase bg-white/80 px-2 py-1 rounded-md backdrop-blur-sm">Item Acquired!</div>
+             <div id="gacha-title-badge" class="mb-4 text-sm font-bold text-slate-400 uppercase bg-white/80 px-2 py-1 rounded-md backdrop-blur-sm">Item Acquired!</div>
              
              <!-- Card -->
              <div class="perspective-1000 w-48 h-64 mb-6 cursor-pointer relative z-10" id="gacha-card">
